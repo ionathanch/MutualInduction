@@ -276,7 +276,7 @@ def getSubgoal (stx : Syntax) : TacticM Goal :=
     goal.withContext do
     let targetUserName ← target.fvarId!.getUserName
     let targets ← addImplicitTargets elimInfo #[target]
-    evalInduction.checkTargets targets
+    checkInductionTargets targets
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let genFVars ← getFVarsToGeneralize targets goalType
     return ⟨targetName, tag.getId, goal, targetUserName, targets, genFVars, indVal, elimInfo⟩
