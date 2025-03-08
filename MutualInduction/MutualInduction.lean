@@ -1,6 +1,7 @@
 import Lean.Elab.Tactic.Induction
 
 namespace Lean.Elab.Tactic
+open Meta
 
 structure Goal where
   /-- Syntax object of the target -/
@@ -13,7 +14,7 @@ structure Goal where
   targets    : Array Expr
   genFVars   : Array FVarId
   indVal     : InductiveVal
-  elimInfo   : Meta.ElimInfo
+  elimInfo   : ElimInfo
 deriving Inhabited
 
 structure GoalWithMotives extends Goal where
@@ -102,7 +103,7 @@ def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId
     if let some val := decl.value? then
       s := collectFVars s (← instantiateMVars val)
   let fvarIdDeps := s.fvarIds.filter (not ∘ targetFVars.contains)
-  let fvarIds ← Meta.sortFVarIds (fvarIds ++ fvarIdDeps)
+  let fvarIds ← sortFVarIds (fvarIds ++ fvarIdDeps)
   return fvarIds
 
 /--
@@ -119,12 +120,12 @@ def checkTargets (goals : Array Goal) : MetaM Unit := do
       let goal1 := goals[j]!
       let goal2 := goals[i]!
       unless goal1.indVal.all.contains goal2.indVal.name do
-        Meta.throwTacticEx `mutual_induction goal1.mvarId
+        throwTacticEx `mutual_induction goal1.mvarId
           m!"targets do not belong to mutual inductive types: \
              {goal1.target} is in {goal1.indVal.name}, \
              while {goal2.target} is in {goal2.indVal.name}"
       if goal1.indVal.name == goal2.indVal.name then
-        Meta.throwTacticEx `mutual_induction goal1.mvarId
+        throwTacticEx `mutual_induction goal1.mvarId
           m!"duplicate target inductive types: \
              {goal1.target} and {goal2.target} are both in {goal1.indVal.name}"
   let allIndNames := goals[0]!.indVal.all
@@ -134,7 +135,7 @@ def checkTargets (goals : Array Goal) : MetaM Unit := do
     unless targetIndNames.contains indName do
     missingIndNames := missingIndNames.push indName
   unless missingIndNames.isEmpty do
-    Meta.throwTacticEx `mutual_induction goals[0]!.mvarId
+    throwTacticEx `mutual_induction goals[0]!.mvarId
       m!"missing targets for mutual inductive types: {missingIndNames}"
 
 /--
@@ -194,7 +195,7 @@ where
     let ⟨genFVars, goal⟩ ← g.mvarId.revert g.genFVars
     goal.withContext do
     let goalType ← MetavarDecl.type <$> goal.getDecl
-    let motive ← Meta.mkLambdaFVars g.targets goalType
+    let motive ← mkLambdaFVars g.targets goalType
     return {g with mvarId := goal, genFVars, motive}
   filterGenFVars (g : Goal) : MetaM Goal := do
     let genFVars ← g.genFVars.filterM notFreeInAnyGoal
@@ -233,9 +234,9 @@ def deduplicate (tags : Array (Name × Name)) (alts : Array (Array Alt)) : MetaM
       let deAlt := deduped[i]!.mvarId
       let otherAlt := alt[i]!.mvarId
       unless deAlt == otherAlt do
-      let altExpectedType ← Meta.inferType (.mvar deAlt)
-      let altType ← Meta.inferType (.mvar otherAlt)
-      if ← Meta.isDefEqGuarded altExpectedType altType then
+      let altExpectedType ← inferType (.mvar deAlt)
+      let altType ← inferType (.mvar otherAlt)
+      if ← isDefEqGuarded altExpectedType altType then
         otherAlt.assign (.mvar deAlt)
   -- ensure root of user-facing name corresponds to the original subgoal name
   for alt in deduped do
@@ -270,11 +271,11 @@ def getSubgoal (stx : Syntax) : TacticM Goal :=
     goal.withContext do
     let target ← elabTerm targetName none
     let indVal ← getInductiveVal goal target
-    let elimInfo ← Meta.getElimInfo (mkRecName indVal.name) indVal.name
+    let elimInfo ← getElimInfo (mkRecName indVal.name) indVal.name
     let ⟨goal, target⟩ ← generalizeTarget goal target
     goal.withContext do
     let targetUserName ← target.fvarId!.getUserName
-    let targets ← Meta.addImplicitTargets elimInfo #[target]
+    let targets ← addImplicitTargets elimInfo #[target]
     evalInduction.checkTargets targets
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let genFVars ← getFVarsToGeneralize targets goalType
@@ -289,10 +290,10 @@ where
   -/
   getInductiveVal (mvarId : MVarId) (target : Expr) : MetaM InductiveVal :=
     mvarId.withContext do
-      let targetType ← Meta.inferType target
-      let targetType ← Meta.whnf targetType
+      let targetType ← inferType target
+      let targetType ← whnf targetType
       matchConstInduct targetType.getAppFn
-        (fun _ => Meta.throwTacticEx `mutual_induction mvarId
+        (fun _ => throwTacticEx `mutual_induction mvarId
           m!"target is not an inductive type{indentExpr targetType}")
         (fun val _ => pure val)
   /--
@@ -305,7 +306,7 @@ where
         if target.isFVar then target.fvarId!.isLetVar else pure true
       if generalize? then
         let ⟨#[target], mvarId⟩ ← mvarId.generalize #[{ expr := target }]
-          | Meta.throwTacticEx `mutual_induction mvarId
+          | throwTacticEx `mutual_induction mvarId
               m!"failed to generalize target{indentExpr target}"
         return ⟨mvarId, .fvar target⟩
       else return ⟨mvarId, target⟩
@@ -328,12 +329,12 @@ def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
     let result ← withRef g.stx do
       ElimApp.mkElimApp g.elimInfo (g.motives ++ g.targets) g.mvarId.name
     -- assign current motive
-    let motiverInferredType ← Meta.inferType g.motive
-    let motiveType ← Meta.inferType (.mvar result.motive)
-    unless (← Meta.isDefEqGuarded motiverInferredType motiveType) do
-      Meta.throwTacticEx `mutual_induction g.mvarId
+    let motiverInferredType ← inferType g.motive
+    let motiveType ← inferType (.mvar result.motive)
+    unless (← isDefEqGuarded motiverInferredType motiveType) do
+      throwTacticEx `mutual_induction g.mvarId
         m!"type mismatch when assigning motive{indentExpr g.motive}\n\
-           {← Meta.mkHasTypeButIsExpectedMsg motiverInferredType motiveType}"
+           {← mkHasTypeButIsExpectedMsg motiverInferredType motiveType}"
     result.motive.assign g.motive
     -- apply eliminator
     g.mvarId.assign result.elimApp
