@@ -131,7 +131,7 @@ e₁ : n₁ + m = k₁ + 1
 ▼ case right.succ
 m k₂ : Nat
 ek : Even k₂
-ih : ∀ (n : Nat), n + m = k₂ → Even n ∧ Even m ∨ Odd n ∧ Odd m
+ih : ∀ (n : Nat), n + m = k₂ → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 n₂ : Nat
 e₂ : n₂ + m = k₂ + 1
 ⊢ (Odd n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
