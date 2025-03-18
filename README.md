@@ -183,7 +183,17 @@ This work is done by `Lean.Elab.Tactic.getSubgoal`.
 
 ### 2. Check coverage
 
-[TODO]
+Although the previous step ensures that the targets are inductive,
+we also need to ensure that
+
+* The targets all belong to inductive types in the *same* mutual declaration;
+* The targets each belong to a *different* inductive type; and
+* The targets belong to *all* of the mutual inductive types.
+
+These conditions ensure that we have exactly all motives needed
+to apply the recursors to each goal.
+A possible flexibility improvement is to allow omitting targets
+by filling in the missing motive with a constant function returning `True`.
 
 This work is done by `Lean.Elab.Tactic.checkTargets`.
 
