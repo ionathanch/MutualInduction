@@ -77,3 +77,75 @@ theorem evenOddInv' (n : Nat) :
   mutual_induction | left => h | right => h
   case zero => injection e
   all_goals injection e with e; subst e; assumption
+
+theorem plusEvenOdd m :
+  (∀ n, Even (n + m) → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)) ∧
+  (∀ n, Odd (n + m) → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
+  constructor
+  case' left => intro n₁ enm; generalize e₁ : n₁ + m = k₁ at enm
+  case' right => intro n₂ onm; generalize e₂ : n₂ + m = k₂ at onm
+  mutual_induction | left => enm | right => onm
+  case left.zero =>
+    have _ : n₁ = 0 := by omega
+    have _ : m = 0 := by omega
+    subst n₁ m
+    left; constructor <;> constructor
+  case left.succ =>
+    cases n₁
+    case zero =>
+      simp at e₁; subst e₁
+      left; constructor <;> constructor; assumption
+    case succ k _ ih n =>
+      have e : n + m = k := by omega
+      cases ih n e
+      case inl h =>
+        let ⟨en, om⟩ := h
+        left; constructor; constructor; assumption; assumption
+      case inr h =>
+        let ⟨en, om⟩ := h
+        right; constructor; constructor; assumption; assumption
+  case right.succ =>
+    cases n₂
+    case zero =>
+      simp at e₂; subst e₂
+      right; constructor <;> constructor; assumption
+    case succ k _ ih n =>
+      have e : n + m = k := by omega
+      cases ih n e
+      case inl h =>
+        let ⟨en, om⟩ := h
+        left; constructor; constructor; assumption; assumption
+      case inr h =>
+        let ⟨en, om⟩ := h
+        right; constructor; constructor; assumption; assumption
+
+mutual
+variable
+  {motive_1 : ∀ n, Even n → Prop}
+  {motive_2 : ∀ n, Odd n → Prop}
+
+inductive Even.below' : ∀ {n}, Even n → Prop where
+  | zero : Even.below' zero
+  | succ : ∀ n {on : Odd n}, motive_2 n on →
+    Odd.below' on → Even.below' (succ n on)
+
+inductive Odd.below' : ∀ {n}, Odd n → Prop where
+  | succ : ∀ n {en : Even n}, motive_1 n en →
+    Even.below' en → Odd.below' (succ n en)
+end
+
+theorem brecOn
+  {P : ∀ n, Even n → Prop}
+  {Q : ∀ n, Odd  n → Prop} :
+  (∀ {n} {en : Even n}, @Even.below P Q n en → P n en) →
+  (∀ {n} {on : Odd  n}, @Odd.below  P Q n on → Q n on) →
+  (∀ {n} (en : Even n), P n en) ∧
+  (∀ {n} (on : Odd  n), Q n on) := by
+  intro he ho
+  constructor
+  case' left  => intro n en; apply he
+  case' right => intro n on; apply ho
+  mutual_induction | left => en | right => on
+  case zero => exact Even.below.zero
+  case left.succ  ih => exact Even.below.succ _ ih (ho ih)
+  case right.succ ih => exact Odd.below.succ  _ ih (he ih)
