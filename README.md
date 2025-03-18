@@ -5,7 +5,7 @@ For now, the syntax looks like the below,
 with no support yet for the usual `induction` tactic's features of
 `using`, `generalizing`, or `with`.
 
-```lean4
+```lean
 mutual_induction | tag₁ => x₁ ... | tagₙ => xₙ
 ```
 
@@ -13,7 +13,7 @@ The doc comment for the tactic gives an example using mutual even/odd naturals,
 which demonstrates basic usage but not some of the subtler issues with implementation.
 Here, we'll use even/odd predicates over naturals as the running example.
 
-```lean4
+```lean
 mutual
 inductive Even : Nat → Prop
   | zero : Even 0
@@ -29,7 +29,7 @@ open Even Odd
 Recursors are generated for this mutual pair of inductives,
 which share the same motives and cases but with different conclusions.
 
-```lean4
+```lean
 Even.rec : ∀ {motive_1 : ∀ n, Even n → Prop} {motive_2 : ∀ n, Odd n → Prop},
   -- cases for Even
   motive_1 0 zero →
@@ -52,7 +52,7 @@ Odd.rec  : ∀ {motive_1 : ∀ n, Even n → Prop} {motive_2 : ∀ n, Odd n → 
 We can conjoin the two conclusions into a single recursor using these two
 to avoid duplicating work proving the identical cases.
 
-```lean4
+```lean
 theorem rec : ∀ {motive_1 motive_2}, ... →
   (∀ {n} (en : Even n), motive_1 n en) ∧
   (∀ {n} (on : Odd n),  motive_2 n on) := by ...
@@ -64,7 +64,7 @@ for unification to solve goals automatically.
 Otherwise, it must be manually applied and manipulated.
 For example, reordering and pulling the `n` out of the conjunction is equivalent:
 
-```lean4
+```lean
 theorem rec' : ∀ {motive_1 motive_2}, ... → ∀ {n},
   (∀ (on : Odd n),  motive_2 n on) ∧
   (∀ (en : Even n), motive_1 n en) := by ...
@@ -81,7 +81,7 @@ To demonstrate, we prove an inversion theorem about parity addition:
 if the addition of two naturals is even, then they are either both even or both odd;
 and if the addition of two naturals is odd, then one must be even and the other odd.
 
-```lean4
+```lean
 theorem plusEvenOdd m :
   (∀ n, Even (n + m) → (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)) ∧
   (∀ n, Odd  (n + m) → (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
@@ -96,7 +96,7 @@ we can't induct on inductives whose indices aren't variables,
 so we generalize `n + m` over an equality.
 The proof state now looks like the below.
 
-```lean4
+```lean
 ▼ case left
 m n₁ k₁ : Nat
 e₁ : n₁ + m = k₁
@@ -114,7 +114,7 @@ We now apply mutual induction by `mutual_induction | left => enm | right => onm`
 which says that we are doing induction on `enm` in goal `left` and on `onm` in goal `right`.
 It yields the following goals.
 
-```lean4
+```lean
 ▼ case left.zero
 m n₁ : Nat
 e₁ : n₁ + m = 0
@@ -198,7 +198,7 @@ which makes sense because it was introduced outside of the conjunction.
 Only now do we finally generalize the variables
 and compute the motives by abstracting the goals over the targets.
 
-```lean4
+```lean
 ▼ case left
 m k₁ : Nat
 enm : Even k₁
@@ -232,7 +232,7 @@ so we can retrieve the recursor for that inductive type
 and instantiate it with the motives and targets,
 leaving the remaining arguments as subgoals to be solved.
 
-```lean4
+```lean
 ▼ case left
 m k₁ : Nat
 enm : Even k₁
@@ -274,7 +274,7 @@ to match the original goal whose target's inductive type contains that construct
 Picking the subgoals that prove the motive that applies to the parent goal's target
 ensures that we get the correct name.
 
-```lean4
+```lean
 ▼ case left.Even.zero
 m : Nat
 ⊢ ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
@@ -307,7 +307,7 @@ Let `Γ` and `Δ` represent telescopes.
 Generally, a set of mutual inductive types consists of a set of inductive types
 that share a common telescope of parameters:
 
-```lean4
+```lean
 inductive I₁ Γ : Γ₁ → Sort
 ...
 inductive Iₙ Γ : Γₙ → Sort
@@ -315,7 +315,7 @@ inductive Iₙ Γ : Γₙ → Sort
 
 along with a set of constructors for these inductive types:
 
-```lean4
+```lean
   | c₁ : Δ₁ → Ξ₁ → Iᵢ₁
   ...
   | cₘ : Δₘ → Ξₘ → Iᵢₘ
@@ -323,7 +323,7 @@ along with a set of constructors for these inductive types:
 
 where `Ξᵢ` is a nondependent telescope of the form:
 
-```lean4
+```lean
   (Δᵢ₁ → Iᵢⱼ₁) → ... → (Δᵢₖ → Iᵢⱼₖ)
 ```
 
@@ -333,7 +333,7 @@ For each inductive, a recursor is generated,
 all of which take the same parameters `ps : Γ`, `n` motives, and `m` cases.
 The motives are of the form:
 
-```lean4
+```lean
 P₁ : ∀ (xs₁ : Γ₁), I₁ ps xs₁ → Sort
 ...
 Pₙ : ∀ (xsₙ : Γₙ), Iₙ ps xsₙ → Sort
@@ -341,7 +341,7 @@ Pₙ : ∀ (xsₙ : Γₙ), Iₙ ps xsₙ → Sort
 
 and the cases are of the form:
 
-```lean4
+```lean
 g₁ : ∀ (ys₁ : Δ₁) (hs₁ : Ξ₁),
      (∀ (zs₁₁ : Δ₁₁), P₁ⱼ₁ _ (hs₁₁ zs₁₁)) →
      ...
