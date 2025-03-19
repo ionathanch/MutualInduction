@@ -1,4 +1,4 @@
-import «MutualInduction».MutualInduction
+import MutualInduction
 
 mutual
 inductive Ordinal : Type where
@@ -138,8 +138,6 @@ theorem leOverSuccInv : ∀ {is j}, LeOver (succOrdinals is) (.succ j) → LeOve
   intro is j leOver
   let ⟨_, _, h⟩ := leSuccInv'
   exact h leOver
-
-#check Le.rec
 
 theorem leSucc :
   (∀ {i j}, Le i j → Le i (.succ j)) ∧

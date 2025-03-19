@@ -8,7 +8,9 @@ package «MutualInduction» where
 lean_lib «MutualInduction» where
   leanOptions := #[⟨`autoImplicit, false⟩]
 
-lean_lib «Examples» where
+@[test_driver]
+lean_lib «MutualInductionTest» where
+  globs := #[`MutualInductionTest.+]
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`pp.fieldNotation, false⟩,

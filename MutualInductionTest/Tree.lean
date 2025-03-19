@@ -1,4 +1,4 @@
-import «MutualInduction».MutualInduction
+import MutualInduction
 
 mutual
 inductive Tree : Prop where

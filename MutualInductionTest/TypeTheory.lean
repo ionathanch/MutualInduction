@@ -1,4 +1,4 @@
-import «MutualInduction».MutualInduction
+import MutualInduction
 
 inductive Term : Type where
   | var : Nat → Term
