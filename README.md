@@ -82,12 +82,12 @@ if the addition of two naturals is even, then they are either both even or both 
 and if the addition of two naturals is odd, then one must be even and the other odd.
 
 ```lean
-theorem plusEvenOdd m :
+theorem plusEvenOdd (m : Nat) :
   (∀ n, Even (n + m) → (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)) ∧
   (∀ n, Odd  (n + m) → (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
   constructor
-  case' left  => intro n enm; generalize e : n + m = k at enm
-  case' right => intro n onm; generalize e : n + m = k at onm
+  case' left  => intro n₁ enm; generalize e₁ : n₁ + m = k₁ at enm
+  case' right => intro n₂ onm; generalize e₂ : n₂ + m = k₂ at onm
 ```
 
 We wish induct on the proofs of `Even (n + m)` and `Odd (n + m)`.
@@ -311,6 +311,46 @@ then intros the constructor arguments, the induction hypotheses,
 and the generalized variables.
 
 This work is done by `Lean.Elab.Tactic.deduplicate`.
+
+## Joint theorems and extensions
+
+Currently, the best way to state mutually-proven theorems is with a conjunction,
+splitting it into multiple goals.
+This means that using such theorems individually requires splitting apart the conjunction first,
+which is unwieldly and verbose.
+In the [Zulip topic](https://leanprover.zulipchat.com/#narrow/channel/239415-metaprogramming-.2F-tactics/topic/mutual.20induction.20tactic/near/504421657),
+there were discussions on introducing joint theorem syntax,
+which would define at the top level multiple independent theorems
+but open all of them as goals in a single proof state.
+For example, the `plusEvenOdd` theorem could be split into two,
+at the same time introducing named variables in each context.
+
+```lean
+joint (m : Nat)
+theorem plusEven (n₁ : Nat) (enm : Even (n₁ + m)) : (Even n₁ ∧ Even m) ∨ (Odd  n₁ ∧ Odd m)
+theorem plusOdd  (n₂ : Nat) (onm : Odd  (n₂ + m)) : (Odd  n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+by
+  case' plusEven => generalize e₁ : n₁ + m = k₁ at enm
+  case' plusOdd  => generalize e₂ : n₂ + m = k₂ at onm
+```
+
+The resulting proof state looks just like it did with `left` and `right`,
+and at this point is ready for mutual induction with
+`mutual_induction | plusEven => enm | plusOdd => onm`.
+
+Alternatively, it may be reasonable to assume
+when applying mutual induction over a sequence of targets
+that the targets come from the first number of goals in order,
+and simplify the syntax to `mutual_induction enm, onm`.
+This would make it easier to add the usual extensions to the syntax,
+which might have the following shape.
+
+```lean
+mutual_induction x₁ using rec₁, ..., xₙ using recₙ generalizing y₁ ... yₘ with
+| tag₁ z₁ ... zᵢ₁ => tac₁
+...
+| tagₖ z₁ ... zᵢₖ => tacₖ
+```
 
 <!--
 Let `Γ` and `Δ` represent telescopes.
