@@ -136,7 +136,7 @@ theorem wtfInd
   constructor
   case' left => intro Γ h
   case' right => intro Γ a A h
-  mutual_induction | left => h | right => h
+  mutual_induction h, h
   case nil  => exact nil
   case cons => apply cons <;> assumption
   case var  => apply var  <;> assumption
@@ -158,7 +158,7 @@ def wfInd (P : ∀ {Γ}, ⊢ Γ → Prop)
 
 theorem wtwf {Γ a A} (h : Γ ⊢ a ∶ A) : ⊢ Γ := by
   have _ (h : ⊢ Γ) : True := ?dummy
-  mutual_induction | _ => h | dummy => h
+  mutual_induction h, h
   all_goals try simp at * <;> assumption
   -- induction h using Wt.rec (motive_1 := λ _ _ ↦ True)
 
@@ -168,7 +168,7 @@ theorem regularity {Γ} :
   constructor
   case' left => intro x A mem h
   case' right => intro a A h
-  mutual_induction | left => h | right => h
+  mutual_induction h, h
   case nil => sorry
   case cons => sorry
   case var mem _ ih => exact ih _ _ mem

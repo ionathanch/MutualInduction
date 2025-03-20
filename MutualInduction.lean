@@ -26,29 +26,35 @@ structure Alt extends ElimApp.Alt where
 deriving Inhabited
 
 /--
-Given goals `tag₁ ... tagₙ` each with a variable `x₁ ... xₙ` respectively
+Given `n` goals to be solved, each with a variable `x₁ ... xₙ` respectively
 which each belong to a different mutual inductive type,
-`mutual_induction | tag₁ => x₁ ... | tagₙ => xₙ`
-applies mutual induction on each `x` to each goal `tag`.
+`mutual_induction x₁, ..., xₙ`
+applies mutual induction on each `x` to each goal.
 It produces one goal for each constructor of the mutual inductive types,
 in which the target is replaced by a general instance of that constructor
 and an inductive hypothesis is added for each mutually recursive argument to the constructor.
 Note that exactly one goal and target must be provided for each mutual inductive type.
 
-For example, suppose we have mutual inductive types `Even` and `Odd` with constructors
+* `mutual_induction x₁, ..., xₙ generalizing z₁ ... zₘ`,
+  where `z₁ ... zₘ` are variables in the contexts of all `n` goals,
+  generalizes over `z₁ ... zₘ` before applying the induction,
+  but then reintroduces them in each new goal produced.
+  The net effect is that each inductive hypothesis is generalized.
+
+As an example, suppose we have mutual inductive types `Even` and `Odd` with constructors
 * `Even.zero : Even`,
 * `Even.succ : Odd → Even`, and
 * `Odd.succ : Even → Odd`.
 
 Given a goal `even` with hypothesis `e : Even` and type `P e`,
 and a goal `odd` with hypothesis `o : Odd` and type `Q o`,
-`mutual_induction | even => e | Odd => o` produces three goals
+`mutual_induction e, o` produces three goals
 (where names `o`, `e`, `ih` are chosen automatically and not accessible):
 * `case even.zero` with state `⊢ P zero`,
 * `case even.succ` with state `o : Odd, ih : Q o ⊢ P (Even.succ o)`, and
 * `case odd.succ`  with state `e : Even, ih : P e ⊢ Q (Odd.succ o)`.
 -/
-syntax (name := mutual_induction) "mutual_induction " ("| " (ident <|> "_") " => " term)+ : tactic
+syntax (name := mutual_induction) "mutual_induction " term,+ (" generalizing" (ppSpace colGt term:max)+)? : tactic
 
 /--
 Find a metavariable whose name is (a suffix or prefix of) `tag`,
@@ -103,8 +109,7 @@ def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId
     if let some val := decl.value? then
       s := collectFVars s (← instantiateMVars val)
   let fvarIdDeps := s.fvarIds.filter (not ∘ targetFVars.contains)
-  let fvarIds ← sortFVarIds (fvarIds ++ fvarIdDeps)
-  return fvarIds
+  return fvarIds ++ fvarIdDeps
 
 /--
 Given all goals of the mutual induction, check that they exactly cover the inductive types:
@@ -139,11 +144,24 @@ def checkTargets (goals : Array Goal) : MetaM Unit := do
       m!"missing targets for mutual inductive types: {missingIndNames}"
 
 /--
+Ensure that all given "free" variables are declared in the contexts of each goal.
+(They're not really "free" if they're bound in the context, are they?)
+-/
+def checkFVars (goals : Array Goal) (idents : Array Syntax) : TermElabM Unit := do
+  for goal in goals do
+    for ident in idents do
+      goal.mvarId.withContext do
+      if let none ← Term.resolveId? ident then
+        throwTacticEx `mutual_induction goal.mvarId
+          m!"unknown identifier '{ident}' in goal '{goal.name}'"
+
+/--
 Compute all motives for all goals,
 in each goal abstracting over the goal's targets
 and generalizing over the goal's free variables,
 unless the variable is free in all goals,
-preventing unnecessary generalization.
+preventing unnecessary generalization,
+except when explicitly generalized by the user.
 
 For example, given the following two goals:
 ```
@@ -161,12 +179,12 @@ case goal2
   ----------
   ⊢ Odd m
 ```
-If `n` and `e` are shared between the two goals, then the motives are:
+If `m` is shared between the two goals, then the motives are:
 ```
-  motive_1 : λ n (en : Even n) ↦ Even m
-  motive_2 : λ n (on : Odd n)  ↦ Odd m
+  motive_1 : λ n (en : Even n) ↦ n = m → Even m
+  motive_2 : λ n (on : Odd n)  ↦ n = m → Odd m
 ```
-But if they are not shared, then the motives are:
+But if they are not shared, or if `m` is explicitly generalized, then the motives are:
 ```
   motive_1 : λ n (en : Even n) ↦ ∀ m, n = m → Even m
   motive_2 : λ n (on : Odd n)  ↦ ∀ m, n = m → Odd m
@@ -177,8 +195,9 @@ Postconditions:
 * The motives in each goal are sorted declaration order of the inductives they apply to; and
 * The goals themselves are sorted by their motives in the same order.
 -/
-def addMotives (gs : Array Goal) : MetaM (Array GoalWithMotives) := do
+def addMotives (gs : Array Goal) (userFVars : Array FVarId): MetaM (Array GoalWithMotives) := do
   let gs ← gs.mapM filterGenFVars
+  let gs ← gs.mapM genUserFVars
   let gs ← gs.mapM addMotive
   let gs := gs.qsort (·.elimInfo.motivePos < ·.elimInfo.motivePos)
   return gs.map (addMotives gs)
@@ -190,13 +209,22 @@ where
       elimInfo := {goal.elimInfo with
         targetsPos := goals.map (·.elimInfo.motivePos)
                    ++ goal.elimInfo.targetsPos}}
-  addMotive (g : Goal) : MetaM GoalWithMotives := do
+  addMotive (g : Goal) : MetaM GoalWithMotives :=
     g.mvarId.withContext do
-    let ⟨genFVars, goal⟩ ← g.mvarId.revert g.genFVars
+    let ⟨genFVars, goal⟩ ← sortFVarIds g.genFVars >>= g.mvarId.revert
     goal.withContext do
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let motive ← mkLambdaFVars g.targets goalType
     return {g with mvarId := goal, genFVars, motive}
+  genUserFVars (g : Goal) : MetaM Goal :=
+    g.mvarId.withContext do
+    let forbidden ← mkGeneralizationForbiddenSet g.targets
+    for userFVarId in userFVars do
+      if forbidden.contains userFVarId then
+        throwError "variable cannot be generalized because target depends on it{indentExpr (mkFVar userFVarId)}"
+      if g.genFVars.contains userFVarId then
+        throwError "unnecessary 'generalizing' argument, variable '{mkFVar userFVarId}' is generalized automatically"
+    pure {g with genFVars := userFVars ++ g.genFVars}
   filterGenFVars (g : Goal) : MetaM Goal := do
     let genFVars ← g.genFVars.filterM notFreeInAnyGoal
     return {g with genFVars}
@@ -254,33 +282,26 @@ where
     | _ => none
 
 /--
-Given a single goal name and target in that goal of the form
-```
-syntax mutualInductionTarget := ("| " ident " => " term)
-```
+Given a goal and a target in that goal,
 produce all the information we can glean without considering the other mutual goals:
 the target and its indices, its inductive type,
 the goal and its the free variables to generalize,
 and information about the eliminator to be applied.
 -/
-def getSubgoal (stx : Syntax) : TacticM Goal :=
-  match Syntax.getKind stx, stx.getArgs with
-  | `group, #[_, tag, _, targetName] => do
-    let goals ← getUnsolvedGoals
-    let goal ← findTag goals tag.getId
-    goal.withContext do
-    let target ← elabTerm targetName none
-    let indVal ← getInductiveVal goal target
-    let elimInfo ← getElimInfo (mkRecName indVal.name) indVal.name
-    let ⟨goal, target⟩ ← generalizeTarget goal target
-    goal.withContext do
-    let targetUserName ← target.fvarId!.getUserName
-    let targets ← addImplicitTargets elimInfo #[target]
-    checkInductionTargets targets
-    let goalType ← MetavarDecl.type <$> goal.getDecl
-    let genFVars ← getFVarsToGeneralize targets goalType
-    return ⟨targetName, tag.getId, goal, targetUserName, targets, genFVars, indVal, elimInfo⟩
-  | _, _ => throwError m!"failed to parse {stx}"
+def getSubgoal (stxgoal : Syntax × MVarId) : TacticM Goal :=
+  let ⟨targetName, goal⟩ := stxgoal
+  goal.withContext do
+  let target ← elabTerm targetName none
+  let indVal ← getInductiveVal goal target
+  let elimInfo ← getElimInfo (mkRecName indVal.name) indVal.name
+  let ⟨goal, target⟩ ← generalizeTarget goal target
+  goal.withContext do
+  let targetUserName ← target.fvarId!.getUserName
+  let targets ← addImplicitTargets elimInfo #[target]
+  checkInductionTargets targets
+  let goalType ← MetavarDecl.type <$> goal.getDecl
+  let genFVars ← getFVarsToGeneralize targets goalType
+  return ⟨targetName, (← goal.getDecl).userName, goal, targetUserName, targets, genFVars, indVal, elimInfo⟩
 where
   /--
   Adapted from `Lean.Elab.Tactic.getInductiveValFromMajor`,
@@ -360,15 +381,27 @@ which we deduplicate so that the user ony needs to solve one set of them.
 -/
 @[tactic mutual_induction]
 def evalMutualInduction : Tactic := λ stx ↦ do
-  let subgoals ← stx[1].getArgs.mapM getSubgoal
+  let ⟨targetNames, genFVarNames⟩ := parse stx
+  let stxgoals := Array.zip targetNames (← getUnsolvedGoals).toArray
+  let subgoals ← stxgoals.mapM getSubgoal
   checkTargets subgoals
+  checkFVars subgoals genFVarNames
+  let genFVars ← getFVarIds genFVarNames
   let tags := subgoals.map (λ goal ↦ ⟨goal.indVal.name, goal.name⟩)
-  let subgoals ← addMotives subgoals
+  let subgoals ← addMotives subgoals genFVars
   let subgoals ← subgoals.mapM evalSubgoal
   let subgoals ← deduplicate tags subgoals
   for subgoal in subgoals do
     let ⟨_, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
     let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
     appendGoals [mvarId]
+  where
+    -- #["mutual_induction", #[x₁, ..., xₙ], #["generalizing", #[y₁, ..., yₘ]]?]
+    parse (stx : Syntax) : Array Syntax × Array Syntax :=
+      let genVars? := stx[2].getArgs
+      let genVars := match genVars? with
+        | #[_, genVars] => genVars.getArgs
+        | _ => #[]
+      ⟨stx[1].getSepArgs, genVars⟩
 
 end Tactic

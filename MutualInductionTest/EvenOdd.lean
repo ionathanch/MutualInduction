@@ -43,7 +43,7 @@ theorem evenOddInd
   intros n; constructor
   case' left  => intro en -- apply @Even.rec @P @Q <;> assumption
   case' right => intro on -- apply @Odd.rec  @P @Q <;> assumption
-  mutual_induction | right => on | left => en
+  mutual_induction on, en
   all_goals apply_rules
 
 theorem evenOddInd'
@@ -65,7 +65,7 @@ theorem evenOddInv :
   (∀ n m, m = n + 1 → Odd  m → Even n) := by
   constructor
   all_goals intro n m e h
-  mutual_induction | left => h | right => h
+  mutual_induction h, h
   case zero => injection e
   all_goals injection e with e; subst e; assumption
 
@@ -74,24 +74,24 @@ theorem evenOddInv' (n : Nat) :
   (∀ m, m = n + 1 → Odd  m → Even n) := by
   constructor
   all_goals intro m e h
-  mutual_induction | left => h | right => h
+  mutual_induction h, h
   case zero => injection e
   all_goals injection e with e; subst e; assumption
 
-theorem plusEvenOdd m :
-  (∀ n, Even (n + m) → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)) ∧
-  (∀ n, Odd (n + m) → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
+theorem plusEvenOdd n m :
+  (Even (n + m) → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)) ∧
+  (Odd (n + m) → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
   constructor
-  case' left => intro n₁ enm; generalize e₁ : n₁ + m = k₁ at enm
-  case' right => intro n₂ onm; generalize e₂ : n₂ + m = k₂ at onm
-  mutual_induction | left => enm | right => onm
+  case' right => intro onm; generalize e₂ : n + m = k₂ at onm
+  case' left => intro enm; generalize e₁ : n + m = k₁ at enm
+  mutual_induction enm, onm generalizing n
   case left.zero =>
-    have _ : n₁ = 0 := by omega
+    have _ : n = 0 := by omega
     have _ : m = 0 := by omega
-    subst n₁ m
+    subst n m
     left; constructor <;> constructor
   case left.succ =>
-    cases n₁
+    cases n
     case zero =>
       simp at e₁; subst e₁
       left; constructor <;> constructor; assumption
@@ -105,7 +105,7 @@ theorem plusEvenOdd m :
         let ⟨en, om⟩ := h
         right; constructor; constructor; assumption; assumption
   case right.succ =>
-    cases n₂
+    cases n
     case zero =>
       simp at e₂; subst e₂
       right; constructor <;> constructor; assumption
@@ -145,7 +145,7 @@ theorem brecOn
   constructor
   case' left  => intro n en; apply he
   case' right => intro n on; apply ho
-  mutual_induction | left => en | right => on
+  mutual_induction on, en
   case zero => exact Even.below.zero
   case left.succ  ih => exact Even.below.succ _ ih (ho ih)
   case right.succ ih => exact Odd.below.succ  _ ih (he ih)

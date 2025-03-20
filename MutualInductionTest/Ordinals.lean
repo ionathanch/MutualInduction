@@ -68,7 +68,7 @@ theorem leInd
   case' left => intro _ _ le
   case' right.left => intro _ _ leunder
   case' right.right => intro _ _ leover
-  mutual_induction | left => le | right.left => leunder | right.right => leover
+  mutual_induction leover, leunder, le
   case underThere ih => apply underThere _ ih
   all_goals apply_rules
 
@@ -94,7 +94,7 @@ theorem leSuccInv' :
     intro is j h
     generalize eis : succOrdinals is = sis at h
     generalize ej : succ j = sj at h
-  mutual_induction | left => h | right.left => h | right.right => h
+  mutual_induction h, h, h
   case succ ih =>
     injection ei with ei; subst ei
     injection ej with ej; subst ej
@@ -145,7 +145,7 @@ theorem leSucc :
   (∀ {is j}, LeOver is j → LeOver is (.succ j)) := by
   repeat' constructor
   all_goals intros _ _ h
-  mutual_induction | left => h | right.left => h | right.right => h
+  mutual_induction h, h, h
   all_goals try simp
   case succ ih => exact .succ ih
   case under i _ _ _ =>

@@ -24,7 +24,7 @@ theorem all (P : Tree → Prop) (Q : Forest → Prop)
   constructor
   case' left  => intro t; apply ht
   case' right => intro f; apply hf
-  mutual_induction | left => t | right => f
+  mutual_induction f, t
   case node f ihf => exact AllTree.node (hf ihf) ihf
   case nil => exact AllForest.nil
   case cons t f iht ihf => exact AllForest.cons (ht iht) (hf ihf) iht ihf

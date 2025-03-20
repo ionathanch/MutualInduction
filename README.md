@@ -2,11 +2,10 @@
 
 This is an experimental mutual induction tactic that acts on multiple goals.
 For now, the syntax looks like the below,
-with no support yet for the usual `induction` tactic's features of
-`using`, `generalizing`, or `with`.
+with no support yet for the usual `induction` tactic's features of `using` or `with`.
 
 ```lean
-mutual_induction | tag₁ => x₁ ... | tagₙ => xₙ
+mutual_induction x₁, ..., xₙ (generalizing y₁ ... yₘ)?
 ```
 
 The doc comment for the tactic gives an example using mutual even/odd naturals,
@@ -82,12 +81,12 @@ if the addition of two naturals is even, then they are either both even or both 
 and if the addition of two naturals is odd, then one must be even and the other odd.
 
 ```lean
-theorem plusEvenOdd (m : Nat) :
-  (∀ n, Even (n + m) → (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)) ∧
-  (∀ n, Odd  (n + m) → (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
+theorem plusEvenOdd (n : Nat) (m : Nat) :
+  (Even (n + m) → (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)) ∧
+  (Odd  (n + m) → (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
   constructor
-  case' left  => intro n₁ enm; generalize e₁ : n₁ + m = k₁ at enm
-  case' right => intro n₂ onm; generalize e₂ : n₂ + m = k₂ at onm
+  case' right => intro onm; generalize e₂ : n + m = k₂ at onm
+  case' left  => intro enm; generalize e₁ : n + m = k₁ at enm
 ```
 
 We wish induct on the proofs of `Even (n + m)` and `Odd (n + m)`.
@@ -98,55 +97,56 @@ The proof state now looks like the below.
 
 ```lean
 ▼ case left
-m n₁ k₁ : Nat
-e₁ : n₁ + m = k₁
+n m k₁ : Nat
+e₁ : n + m = k₁
 enm : Even k₁
-⊢ (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case right
-m n₂ k₂ : Nat
-e₂ : n₂ + m = k₂
+n m k₂ : Nat
+e₂ : n + m = k₂
 onm : Odd k₂
-⊢ (Odd n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+⊢ (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
-We now apply mutual induction by `mutual_induction | left => enm | right => onm`,
+We now apply mutual induction by `mutual_induction enm, onm generalizing n`,
 which says that we are doing induction on `enm` in goal `left` and on `onm` in goal `right`.
 It yields the following goals.
 
 ```lean
 ▼ case left.zero
-m n₁ : Nat
-e₁ : n₁ + m = 0
-⊢ (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+m n : Nat
+e₁ : n + m = 0
+⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case left.succ
 m k₁ : Nat
 ok : Odd k₁
 ih : ∀ (n : Nat), n + m = k₁ → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
-n₁ : Nat
-e₁ : n₁ + m = k₁ + 1
-⊢ (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+n : Nat
+e₁ : n + m = k₁ + 1
+⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case right.succ
 m k₂ : Nat
 ek : Even k₂
 ih : ∀ (n : Nat), n + m = k₂ → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
-n₂ : Nat
-e₂ : n₂ + m = k₂ + 1
-⊢ (Odd n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+n : Nat
+e₂ : n + m = k₂ + 1
+⊢ (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
 The proof proceeds by cases on `n` in the `succ` cases,
-which is why we need the induction hypothesis to be generalized over it.
+which is why we generalize the induction hypothesis over it.
 The full proof can be found at `EvenOdd.plusEvenOdd`.
 
 ## How does the tactic work?
 
-The tactic proceeds in five stages:
+The tactic proceeds in stages:
 
 1. Compute whatever information we can from each goal independently.
-2. Ensure that the goals match the mutual inductives.
+2. Ensure that the goals match the mutual inductives
+   and share the generalized variables.
 3. Compute more information from all goals in tandem.
 4. Apply the appropriate recursor for each goal.
 5. Combine duplicate subgoals from the recursors.
@@ -177,11 +177,11 @@ which means possibly generalizing over all variables in buckets (2) and (3).
 In our example, this corresponds to
 
 * (1) `e₁` and `e₂` by dependency on auxiliary targets `k₁` and `k₂`, respectively;
-* (2, 3) `m`, `n₁`, and `n₂`, depended upon by `e₁`, `e₂`, and the goals.
+* (2, 3) `n` and `m` depended upon by `e₁`, `e₂`, and the goals.
 
 This work is done by `Lean.Elab.Tactic.getSubgoal`.
 
-### 2. Check coverage
+### 2. Check coverage and generalized variables
 
 Although the previous step ensures that the targets are inductive,
 we also need to ensure that
@@ -195,7 +195,13 @@ to apply the recursors to each goal.
 A possible flexibility improvement is to allow omitting targets
 by filling in the missing motive with a constant function returning `True`.
 
-This work is done by `Lean.Elab.Tactic.checkTargets`.
+We then check that the provided generalized variables
+are indeed shared across goals, i.e. declared in each of the goals' contexts.
+Variables depended upon that aren't shared across goals must always be generalized
+to produce closed motives, as described in the previous step.
+
+This work is done by `Lean.Elab.Tactic.checkTargets`
+and by `Lean.Elab.Tactic.checkFVars`.
 
 ### 3. Generalize variables and compute motives
 
@@ -203,7 +209,7 @@ Although we compute the variables that may be generalized independently for each
 we don't yet actually generalize them,
 because there may variables that happen to be common to all goals
 that don't need to be generalized over because they'll always be in scope.
-In this case, `m` is the only such variable,
+In this case, because `n` is explicitly generalized, `m` is the only such variable,
 which makes sense because it was introduced outside of the conjunction.
 Only now do we finally generalize the variables
 and compute the motives by abstracting the goals over the targets.
@@ -213,15 +219,15 @@ and compute the motives by abstracting the goals over the targets.
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
-⊢ ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+⊢ ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 
 ▼ case right
 m k₂ : Nat
 onm : Odd k₂
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n₂ : Nat) (e₂ : n₂ + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
-⊢ ∀ (n₂ : Nat) (e₂ : n₂ + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+⊢ ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
 ```
 
 For each goal, we know the position of the motive that applies to its target
@@ -247,21 +253,21 @@ leaving the remaining arguments as subgoals to be solved.
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n₂ : Nat) (e₂ : n₂ + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
 ⊢ @Even.rec motive_1 motive_2 ?left.Even.zero ?left.Even.succ ?left.Odd.succ k₁ enm
-  : ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+  : ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case right
 m k₂ : Nat
 onm : Odd k₂
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n₂ : Nat) (e₂ : n₂ + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
 ⊢ @Odd.rec motive_1 motive_2 ?right.Even.zero ?right.Even.succ ?right.Odd.succ k₁ enm
-  : ∀ (n₂ : Nat) (e₂ : n₂ + m = 0), (Odd n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+  : ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
 The subgoals are collected up as a 2D array.
@@ -287,19 +293,19 @@ ensures that we get the correct name.
 ```lean
 ▼ case left.Even.zero
 m : Nat
-⊢ ∀ (n₁ : Nat) (e₁ : n₁ + m = 0), (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+⊢ ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case left.Even.succ
 m : Nat
 ⊢ ∀ (k₁ : Nat) (enm : Even k₁),
   (∀ (n : Nat), n + m = k₁ → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)) →
-  ∀ (n₁ : Nat) (e₁ : n₁ + m = k₁ + 1), (Even n₁ ∧ Even m) ∨ (Odd n₁ ∧ Odd m)
+  ∀ (n : Nat) (e₁ : n + m = k₁ + 1), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case right.Odd.succ
 m : Nat
 ⊢ ∀ (k₁ : Nat) (enm : Even k₁),
   (∀ (n : Nat), n + m = k₂ → Even n ∧ Even m ∨ Odd n ∧ Odd m) →
-  ∀ (n₂ : Nat) (e₂ : n₂ + m = k₂ + 1), (Odd n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+  ∀ (n : Nat) (e₂ : n + m = k₂ + 1), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 
 ▶ case right.Even.zero := left.Even.zero
 ▶ case right.Even.succ := left.Even.succ
@@ -312,7 +318,9 @@ and the generalized variables.
 
 This work is done by `Lean.Elab.Tactic.deduplicate`.
 
-## Joint theorems and extensions
+## Extensions
+
+### Joint theorems
 
 Currently, the best way to state mutually-proven theorems is with a conjunction,
 splitting it into multiple goals.
@@ -326,24 +334,26 @@ For example, the `plusEvenOdd` theorem could be split into two,
 at the same time introducing named variables in each context.
 
 ```lean
-joint (m : Nat)
-theorem plusEven (n₁ : Nat) (enm : Even (n₁ + m)) : (Even n₁ ∧ Even m) ∨ (Odd  n₁ ∧ Odd m)
-theorem plusOdd  (n₂ : Nat) (onm : Odd  (n₂ + m)) : (Odd  n₂ ∧ Even m) ∨ (Even n₂ ∧ Odd m)
+joint (n : Nat) (m : Nat)
+theorem plusEven (enm : Even (n + m)) : (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)
+theorem plusOdd  (onm : Odd  (n + m)) : (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)
 by
-  case' plusEven => generalize e₁ : n₁ + m = k₁ at enm
-  case' plusOdd  => generalize e₂ : n₂ + m = k₂ at onm
+  case' plusOdd  => generalize e₂ : n + m = k₂ at onm
+  case' plusEven => generalize e₁ : n + m = k₁ at enm
 ```
 
 The resulting proof state looks just like it did with `left` and `right`,
 and at this point is ready for mutual induction with
-`mutual_induction | plusEven => enm | plusOdd => onm`.
+`mutual_induction enm, onm generalizing n`.
 
-Alternatively, it may be reasonable to assume
-when applying mutual induction over a sequence of targets
-that the targets come from the first number of goals in order,
-and simplify the syntax to `mutual_induction enm, onm`.
-This would make it easier to add the usual extensions to the syntax,
-which might have the following shape.
+### `using` and `with` clauses
+
+At the moment, the tactic is missing support for `using` and `with` clauses.
+The `using` clause specifies a custom recursor for a specified target,
+so there may be one for each target.
+The `with` clause applies tactics to the specified subgoals generated,
+and is sugar for subsequent `case` expressions.
+The syntax for the tactic with these clauses might look something like the following.
 
 ```lean
 mutual_induction x₁ using rec₁, ..., xₙ using recₙ generalizing y₁ ... yₘ with
