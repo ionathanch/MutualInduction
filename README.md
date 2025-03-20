@@ -181,7 +181,7 @@ In our example, this corresponds to
 
 This work is done by `Lean.Elab.Tactic.getSubgoal`.
 
-### 2. Check coverage and generalized variables
+### 2. Check coverage and variable scoping
 
 Although the previous step ensures that the targets are inductive,
 we also need to ensure that
