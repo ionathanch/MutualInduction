@@ -1,5 +1,10 @@
 import Lean.Elab.Tactic.Induction
 
+-- Why is this not in Lean.Expr?
+def Lean.Expr.mvarId? : Expr → Option MVarId
+  | .mvar n => some n
+  | _      => none
+
 namespace Lean.Elab.Tactic
 open Meta
 
@@ -243,13 +248,14 @@ Therefore, only one sequence of subgoals needs to be solved,
 and every other sequence can be pointwise assigned the same solution.
 The sequence we pick out should be the subgoals that prove the motive of its recursor,
 since it informs which parent case name it's associated with.
-The case names are in an association list `tags` that map from the inductive types' names.
+The case names are in an association list `tags` that map from the inductive types' names,
+defaulting to the provided main goal's `tag`.
 
 Preconditions:
 * There must exist at least one sequence of subgoals; and
 * All sequences of subgoals must have the same length and pointwise have the same type.
 -/
-def deduplicate (tags : Array (Name × Name)) (alts : Array (Array Alt)) : MetaM (Array Alt) := do
+def deduplicate (tag : Name) (tags : Array (Name × Name)) (alts : Array (Array Alt)) : MetaM (Array Alt) := do
   let mut deduped := alts[0]!
   -- find the canonical alternatives that prove the motive
   for alt in alts do
@@ -268,18 +274,10 @@ def deduplicate (tags : Array (Name × Name)) (alts : Array (Array Alt)) : MetaM
         otherAlt.assign (.mvar deAlt)
   -- ensure root of user-facing name corresponds to the original subgoal name
   for alt in deduped do
-    let mctx ← getMCtx
-    let some name := altName alt | continue
-    let mctx := MetavarContext.setMVarUserName mctx alt.mvarId name
-    setMCtx mctx
+    let .str ind cstr := alt.info.declName?.getD (← alt.mvarId.getTag) | continue
+    let tag := (tags.toList.lookup ind).getD tag
+    alt.mvarId.setTag <| .str tag cstr
   return deduped
-where
-  altName (alt : Alt) : Option Name :=
-    match alt.info.declName? with
-    | some (.str ind cstr) => do
-      let tag ← tags.toList.lookup ind
-      return .str tag cstr
-    | _ => none
 
 /--
 Given a goal and a target in that goal,
@@ -337,6 +335,7 @@ Apply the eliminator in a goal `g` and return the new metavariables to solve,
 each corresponding to the constructor cases of the eliminator.
 The new metavariables are *not* yet added to the list of goals.
 The motives from the other mutual goals are considered as targets.
+If a motive is missing, add it as another goal.
 
 Preconditions:
 * `g.motives` contains the other motives in declaration order of the inductives they apply to;
@@ -358,6 +357,8 @@ def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
            {← mkHasTypeButIsExpectedMsg motiverInferredType motiveType}"
     result.motive.assign g.motive
     -- apply eliminator
+    let newGoals := result.alts.map (·.mvarId) ++ result.others
+    appendMotives result.elimApp.getAppArgs newGoals
     g.mvarId.assign result.elimApp
     -- return subgoals
     let targetFVars := g.targets.map (·.fvarId!)
@@ -365,6 +366,13 @@ def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
     appendGoals result.others.toList
     return alts.map ({· with numGenFVars := g.genFVars.size})
 where
+  appendMotives (es : Array Expr) (altMVarIds : Array MVarId) : TacticM Unit := do
+    for e in es.reverse,
+        name in g.elimInfo.elimType.getForallBinderNames.reverse do
+      let some mvarId := e.mvarId? | continue
+      unless altMVarIds.contains mvarId do
+        mvarId.setTag name
+        pushGoal mvarId
   clearTargets (mvarIds : Array FVarId) (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
     let mvarId ← alt.mvarId.tryClearMany mvarIds
     return {alt with mvarId := mvarId}
@@ -381,6 +389,7 @@ which we deduplicate so that the user ony needs to solve one set of them.
 -/
 @[tactic mutual_induction]
 def evalMutualInduction : Tactic := λ stx ↦ do
+  let tag ← getMainGoal >>= (·.getTag)
   let ⟨targetNames, genFVarNames⟩ := parse stx
   let stxgoals := Array.zip targetNames (← getUnsolvedGoals).toArray
   let subgoals ← stxgoals.mapM getSubgoal
@@ -390,11 +399,11 @@ def evalMutualInduction : Tactic := λ stx ↦ do
   let tags := subgoals.map (λ goal ↦ ⟨goal.indVal.name, goal.name⟩)
   let subgoals ← addMotives subgoals genFVars
   let subgoals ← subgoals.mapM evalSubgoal
-  let subgoals ← deduplicate tags subgoals
-  for subgoal in subgoals do
+  let subgoals ← deduplicate tag tags subgoals
+  for subgoal in subgoals.reverse do
     let ⟨_, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
     let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
-    appendGoals [mvarId]
+    pushGoal mvarId
   where
     -- #["mutual_induction", #[x₁, ..., xₙ], #["generalizing", #[y₁, ..., yₘ]]?]
     parse (stx : Syntax) : Array Syntax × Array Syntax :=
