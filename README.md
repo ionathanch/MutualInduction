@@ -1,5 +1,19 @@
 # Mutual induction tactic for Lean 4
 
+* [Mutual induction with recursors](#mutual-induction-with-recursors)
+* [Mutual induction with the tactic](#mutual-induction-with-the-tactic)
+* [How does the tactic work?](#how-does-the-tactic-work)
+  1. [Compute targets and generalized variables](#1-compute-targets-and-generalized-variables)
+  2. [Check coverage and variable scoping](#2-check-coverage-and-variable-scoping)
+  3. [Generalize variables and compute motives](#3-generalize-variables-and-compute-motives)
+  4. [Apply recursors](#4-apply-recursors)
+  5. [Deduplicate subgoals](#5-deduplicate-subgoals)
+* [Extensions](#extensions)
+  * [Joint theorems](#joint-theorems)
+  * [`using` and `with` clauses](#using-and-with-clauses)
+
+---
+
 This is an experimental mutual induction tactic that acts on multiple goals.
 For now, the syntax looks like the below,
 with no support yet for the usual `induction` tactic's features of `using` or `with`.
