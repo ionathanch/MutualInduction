@@ -28,3 +28,19 @@ theorem all (P : Tree → Prop) (Q : Forest → Prop)
   case node f ihf => exact AllTree.node (hf ihf) ihf
   case nil => exact AllForest.nil
   case cons t f iht ihf => exact AllForest.cons (ht iht) (hf ihf) iht ihf
+
+inductive RoseTree : Type where
+  | node : List RoseTree → RoseTree
+open RoseTree
+
+inductive AllList {α} (P : α → Prop) : List α → Prop where
+  | nil : AllList P []
+  | cons : ∀ {x xs}, P x → AllList P xs → AllList P (x :: xs)
+
+theorem RoseTree.elim (P : RoseTree → Prop)
+  (hnode : ∀ {t}, AllList P t → P (node t)) : ∀ t, P t := by
+  intro t
+  mutual_induction t
+  case node ih => exact hnode ih
+  case nil => constructor
+  case cons => constructor <;> assumption
