@@ -202,12 +202,12 @@ we also need to ensure that
 
 * The targets all belong to inductive types in the *same* mutual declaration;
 * The targets each belong to a *different* inductive type; and
-* The targets belong to *all* of the mutual inductive types.
+* ~~The targets belong to *all* of the mutual inductive types.~~
 
-These conditions ensure that we have exactly all motives needed
+These conditions ensure that we have the right motives needed
 to apply the recursors to each goal.
-A possible flexibility improvement is to allow omitting targets
-by filling in the missing motive with a constant function returning `True`.
+If a motive is missing due to a missing target for one of the inductive types,
+then we add that motive as an additional goal.
 
 We then check that the provided generalized variables
 are indeed shared across goals, i.e. declared in each of the goals' contexts.

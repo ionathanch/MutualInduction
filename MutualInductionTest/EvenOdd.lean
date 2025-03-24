@@ -119,6 +119,14 @@ theorem plusEvenOdd n m :
         let ⟨en, om⟩ := h
         right; constructor; constructor; assumption; assumption
 
+theorem even2 n (en : Even (n + 2)) : Even n := by
+  generalize e : n + 2 = m at en
+  mutual_induction en generalizing n
+  case zero => injection e
+  case succ on ih => cases e; cases on; assumption
+  case motive_2 => intros; exact True
+  case succ => exact True.intro
+
 mutual
 variable
   {motive_1 : ∀ n, Even n → Prop}

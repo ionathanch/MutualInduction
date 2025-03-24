@@ -27,7 +27,7 @@ structure GoalWithMotives extends Goal where
   motives : Array Expr := #[]
 
 structure Alt extends ElimApp.Alt where
-  numGenFVars : Nat
+  numGenFVars : Nat := 0
 deriving Inhabited
 
 /--
@@ -120,7 +120,7 @@ def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId
 Given all goals of the mutual induction, check that they exactly cover the inductive types:
 * The targets must all belong to inductive types in the same mutual declaration;
 * The targets must each belong to a different inductive type; and
-* The targets must belong to all of the mutual inductive types.
+* [Deprecated] The targets must belong to all of the mutual inductive types.
 
 Precondition: There must exist at least one goal.
 -/
@@ -138,15 +138,16 @@ def checkTargets (goals : Array Goal) : MetaM Unit := do
         throwTacticEx `mutual_induction goal1.mvarId
           m!"duplicate target inductive types: \
              {goal1.target} and {goal2.target} are both in {goal1.indVal.name}"
-  let allIndNames := goals[0]!.indVal.all
-  let targetIndNames := goals.map (·.indVal.name)
-  let mut missingIndNames : Array Name := #[]
-  for indName in allIndNames do
-    unless targetIndNames.contains indName do
-    missingIndNames := missingIndNames.push indName
-  unless missingIndNames.isEmpty do
-    throwTacticEx `mutual_induction goals[0]!.mvarId
-      m!"missing targets for mutual inductive types: {missingIndNames}"
+  /- No longer requiring coverage of all inductives -/
+  -- let allIndNames := goals[0]!.indVal.all
+  -- let targetIndNames := goals.map (·.indVal.name)
+  -- let mut missingIndNames : Array Name := #[]
+  -- for indName in allIndNames do
+  --   unless targetIndNames.contains indName do
+  --   missingIndNames := missingIndNames.push indName
+  -- unless missingIndNames.isEmpty do
+  --   throwTacticEx `mutual_induction goals[0]!.mvarId
+  --     m!"missing targets for mutual inductive types: {missingIndNames}"
 
 /--
 Ensure that all given "free" variables are declared in the contexts of each goal.
@@ -358,21 +359,28 @@ def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
     result.motive.assign g.motive
     -- apply eliminator
     let newGoals := result.alts.map (·.mvarId) ++ result.others
-    appendMotives result.elimApp.getAppArgs newGoals
-    g.mvarId.assign result.elimApp
+    let elimApp ← instantiateMVars result.elimApp
+    appendMotives elimApp.getAppArgs newGoals
+    g.mvarId.assign elimApp
     -- return subgoals
     let targetFVars := g.targets.map (·.fvarId!)
     let alts ← result.alts.mapM (clearTargets targetFVars)
     appendGoals result.others.toList
-    return alts.map ({· with numGenFVars := g.genFVars.size})
+    return alts.map addNumGenFVars
 where
+  addNumGenFVars (alt : ElimApp.Alt) : Alt :=
+    if alt.info.provesMotive
+    then {alt with numGenFVars := g.genFVars.size}
+    else {alt with}
   appendMotives (es : Array Expr) (altMVarIds : Array MVarId) : TacticM Unit := do
-    for e in es.reverse,
-        name in g.elimInfo.elimType.getForallBinderNames.reverse do
+    let mut unsolvedMotives : Array MVarId := #[]
+    for e in es,
+        name in g.elimInfo.elimType.getForallBinderNames do
       let some mvarId := e.mvarId? | continue
       unless altMVarIds.contains mvarId do
         mvarId.setTag name
-        pushGoal mvarId
+        unsolvedMotives := unsolvedMotives.push mvarId
+    pushGoals unsolvedMotives.toList
   clearTargets (mvarIds : Array FVarId) (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
     let mvarId ← alt.mvarId.tryClearMany mvarIds
     return {alt with mvarId := mvarId}
