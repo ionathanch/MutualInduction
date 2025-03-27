@@ -17,7 +17,7 @@ inductive AllForest (P : Tree → Prop) (Q : Forest → Prop) : Forest → Prop 
   | cons : ∀ {t f}, P t → Q f → AllTree P Q t → AllForest P Q f → AllForest P Q (cons t f)
 end
 
-theorem all (P : Tree → Prop) (Q : Forest → Prop)
+theorem elim (P : Tree → Prop) (Q : Forest → Prop)
   (ht : ∀ {t}, AllTree P Q t → P t)
   (hf : ∀ {f}, AllForest P Q f → Q f) :
   (∀ t, P t) ∧ (∀ f, Q f) := by
@@ -29,18 +29,32 @@ theorem all (P : Tree → Prop) (Q : Forest → Prop)
   case nil => exact AllForest.nil
   case cons t f iht ihf => exact AllForest.cons (ht iht) (hf ihf) iht ihf
 
-inductive RoseTree : Type where
-  | node : List RoseTree → RoseTree
+inductive RoseTree (α : Type) : Type where
+  | node : α → List (RoseTree α) → RoseTree α
 open RoseTree
 
-inductive AllList {α} (P : α → Prop) : List α → Prop where
-  | nil : AllList P []
-  | cons : ∀ {x xs}, P x → AllList P xs → AllList P (x :: xs)
+inductive List.All {α} (P : α → Prop) : List α → Prop where
+  | nil : All P []
+  | cons : ∀ {x xs}, P x → All P xs → All P (x :: xs)
 
-theorem RoseTree.elim (P : RoseTree → Prop)
-  (hnode : ∀ {t}, AllList P t → P (node t)) : ∀ t, P t := by
+theorem RoseTree.elim {α} (P : RoseTree α → Prop)
+  (hnode : ∀ {x t}, List.All P t → P (node x t)) : ∀ t, P t := by
   intro t
-  mutual_induction t
+  induction t using RoseTree.rec (motive_2 := List.All P)
   case node ih => exact hnode ih
   case nil => constructor
   case cons => constructor <;> assumption
+
+inductive RoseTree.belowAll {α} {motive : RoseTree α → Prop} : RoseTree α → Prop where
+  | node : ∀ {x t}, List.All motive t → List.All belowAll t → belowAll (node x t)
+
+theorem RoseTree.brecOnAll {α} {P : RoseTree α → Prop}
+  (hnode : ∀ {t}, RoseTree.belowAll (motive := P) t → P t) :
+  ∀ t, P t := by
+  intro t
+  apply hnode
+  induction t using RoseTree.elim
+  case _ ts =>
+    constructor
+    induction ts <;> constructor
+    apply hnode; assumption; assumption; assumption
