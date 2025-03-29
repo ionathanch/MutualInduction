@@ -8,9 +8,13 @@ package «MutualInduction» where
 lean_lib «MutualInduction» where
   leanOptions := #[⟨`autoImplicit, false⟩]
 
+@[default_target]
+lean_lib «MkAll» where
+  leanOptions := #[⟨`autoImplicit, false⟩]
+
 @[test_driver]
-lean_lib «MutualInductionTest» where
-  globs := #[`MutualInductionTest.+]
+lean_lib «Test» where
+  globs := #[`MutualInductionTest.+, `AllTest.+]
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`pp.fieldNotation, false⟩,
