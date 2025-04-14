@@ -28,6 +28,7 @@ structure GoalWithMotives extends Goal where
 
 structure Alt extends ElimApp.Alt where
   numGenFVars : Nat := 0
+  trivial : Bool := false
 deriving Inhabited
 
 /--
@@ -360,19 +361,25 @@ def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
     -- apply eliminator
     let newGoals := result.alts.map (·.mvarId) ++ result.others
     let elimApp ← instantiateMVars result.elimApp
-    appendMotives elimApp.getAppArgs newGoals
+    let unsolvedMotives ← appendMotives elimApp.getAppArgs newGoals
     g.mvarId.assign elimApp
     -- return subgoals
     let targetFVars := g.targets.map (·.fvarId!)
     let alts ← result.alts.mapM (clearTargets targetFVars)
     appendGoals result.others.toList
-    return alts.map addNumGenFVars
+    alts.mapM (addNumGenFVars unsolvedMotives)
 where
-  addNumGenFVars (alt : ElimApp.Alt) : Alt :=
+  addNumGenFVars (unsolvedMotives : Array MVarId) (alt : ElimApp.Alt) : TacticM Alt := do
+    let altType ← inferType (.mvar alt.mvarId)
+    let altHead := altType.getForallBody.getAppFn
+    let trivial :=
+      if let some altHeadMVar := altHead.mvarId? then
+        unsolvedMotives.contains altHeadMVar
+      else false
     if alt.info.provesMotive
-    then {alt with numGenFVars := g.genFVars.size}
-    else {alt with}
-  appendMotives (es : Array Expr) (altMVarIds : Array MVarId) : TacticM Unit := do
+    then return {alt with trivial, numGenFVars := g.genFVars.size}
+    else return {alt with trivial}
+  appendMotives (es : Array Expr) (altMVarIds : Array MVarId) : TacticM (Array MVarId) := do
     let mut unsolvedMotives : Array MVarId := #[]
     for e in es,
         name in g.elimInfo.elimType.getForallBinderNames do
@@ -380,10 +387,40 @@ where
       unless altMVarIds.contains mvarId do
         mvarId.setTag name
         unsolvedMotives := unsolvedMotives.push mvarId
-    pushGoals unsolvedMotives.toList
-  clearTargets (mvarIds : Array FVarId) (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
+    unsolvedMotives.forM trivialMotive
+    return unsolvedMotives
+  trivialMotive (mvarId : MVarId) : TacticM Unit := do
+    let motiveType ← inferType (.mvar mvarId)
+    forallTelescope motiveType fun args bodyType => do
+      let trivial ← mkLambdaFVars args (.const `PUnit [bodyType.sortLevel!])
+      mvarId.assign trivial
+  clearTargets (mvarIds : Array FVarId)  (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
     let mvarId ← alt.mvarId.tryClearMany mvarIds
-    return {alt with mvarId := mvarId}
+    return {alt with mvarId}
+
+/--
+Intro the induction hypotheses of the goal, clearing away useless `PUnit`s,
+along with generalized variables.
+If the goal itself is trivial because its motive was instantiated as `PUnit`,
+solve the goal by `constructor`.
+Otherwise, add the goal to the current list of goals.
+-/
+def addSubgoal (subgoal : Alt) : TacticM Unit := do
+  let ⟨ihs, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
+    let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
+    let punits ← mvarId.withContext <| ihs.filterM isPUnit
+    let mvarId ← mvarId.tryClearMany punits
+    if subgoal.trivial then
+      let mvarIds ← mvarId.constructor
+      unless mvarIds.isEmpty do
+        throwTacticEx `mutual_induction mvarId
+          m!"could not solve generated subgoal {subgoal.name}"
+    else pushGoal mvarId
+  where
+    isPUnit (ih : FVarId) : TacticM Bool := do
+      let ihType ← ih.getType >>= instantiateMVars
+      let ihType ← whnf ihType
+      return ihType.isConstOf `PUnit
 
 /--
 When evaluating the mutual induction tactic,
@@ -408,10 +445,7 @@ def evalMutualInduction : Tactic := λ stx ↦ do
   let subgoals ← addMotives subgoals genFVars
   let subgoals ← subgoals.mapM evalSubgoal
   let subgoals ← deduplicate tag tags subgoals
-  for subgoal in subgoals.reverse do
-    let ⟨_, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
-    let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
-    pushGoal mvarId
+  for subgoal in subgoals.reverse do addSubgoal subgoal
   where
     -- #["mutual_induction", #[x₁, ..., xₙ], #["generalizing", #[y₁, ..., yₘ]]?]
     parse (stx : Syntax) : Array Syntax × Array Syntax :=

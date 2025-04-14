@@ -123,9 +123,7 @@ theorem even2 n (en : Even (n + 2)) : Even n := by
   generalize e : n + 2 = m at en
   mutual_induction en generalizing n
   case zero => injection e
-  case succ on ih => cases e; cases on; assumption
-  case motive_2 => intros; exact True
-  case succ => exact True.intro
+  case succ on => cases e; cases on; assumption
 
 mutual
 variable
