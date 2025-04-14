@@ -11,8 +11,10 @@ set_option hygiene false
 local infix:40 "⇒" => Step
 inductive Step : Com → Com → Prop where
   | force {m} : force (thunk m) ⇒ m
-  | lam {m v} : app (lam m) v ⇒ substCom (v +: var) m
-  | ret {v m} : letin (ret v) m ⇒ substCom (v +: var) m
+  | lam {m v} : app (lam m) v ⇒ m⦃v⦄
+  | ret {v m} : letin (ret v) m ⇒ m⦃v⦄
+  | inl {v m n} : case (inl v) m n ⇒ m⦃v⦄
+  | inr {v m n} : case (inr v) m n ⇒ n⦃v⦄
   | app {m m' v} :
     m ⇒ m' →
     ------------------
@@ -78,7 +80,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
 @[simp]
 def nf : Com → Prop
   | lam _ | ret _ => True
-  | force _ | app _ _ | letin _ _ => False
+  | force _ | app _ _ | letin _ _ | case _ _ _ => False
 
 theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *

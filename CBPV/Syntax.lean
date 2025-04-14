@@ -15,6 +15,7 @@ infixr:50 "+:" => cons
 mutual
 inductive ValType : Type where
   | Unit : ValType
+  | Sum : ValType → ValType → ValType
   | U : ComType → ValType
 
 inductive ComType : Type where
@@ -31,6 +32,8 @@ mutual
 inductive Val : Type where
   | var : Nat → Val
   | unit : Val
+  | inl : Val → Val
+  | inr : Val → Val
   | thunk : Com → Val
 
 inductive Com : Type where
@@ -39,6 +42,7 @@ inductive Com : Type where
   | app : Com → Val → Com
   | ret : Val → Com
   | letin : Com → Com → Com
+  | case : Val → Com → Com → Com
 end
 open Val Com
 
@@ -83,6 +87,8 @@ mutual
 def renameVal (ξ : Nat → Nat) : Val → Val
   | var s => var (ξ s)
   | unit => unit
+  | inl v => inl (renameVal ξ v)
+  | inr v => inr (renameVal ξ v)
   | thunk m => thunk (renameCom ξ m)
 
 @[simp]
@@ -92,6 +98,7 @@ def renameCom (ξ : Nat → Nat) : Com → Com
   | app m v => app (renameCom ξ m) (renameVal ξ v)
   | ret v => ret (renameVal ξ v)
   | letin m n => letin (renameCom ξ m) (renameCom (lift ξ) n)
+  | case v m n => case (renameVal ξ v) (renameCom (lift ξ) m) (renameCom (lift ξ) n)
 end
 
 -- Renaming extensionality
@@ -100,7 +107,7 @@ theorem renameExt ξ ζ (h : ∀ x, ξ x = ζ x) :
   (∀ m, renameCom ξ m = renameCom ζ m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing ξ ζ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [liftExt]
 
 def renameValExt ξ ζ h := (renameExt ξ ζ h).left
@@ -112,7 +119,7 @@ theorem renameId :
   (∀ m, renameCom id m = m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals try assumption
   all_goals unfold Function.comp id
   all_goals rw [renameCompExt (0 +: succ) id]
@@ -127,7 +134,7 @@ theorem renameComp' ξ ζ ς (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   (∀ m, (renameCom ξ ∘ renameCom ζ) m = renameCom ς m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?comp⟩
   mutual_induction v, m generalizing ξ ζ ς
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [liftComp]
 
 def renameValComp ξ ζ v : renameVal ξ (renameVal ζ v) = renameVal (ξ ∘ ζ) v :=
@@ -190,6 +197,8 @@ mutual
 def substVal (σ : Nat → Val) : Val → Val
   | var s => σ s
   | unit => unit
+  | inl v => inl (substVal σ v)
+  | inr v => inr (substVal σ v)
   | thunk m => thunk (substCom σ m)
 
 @[simp]
@@ -199,6 +208,7 @@ def substCom (σ : Nat → Val) : Com → Com
   | app m v => app (substCom σ m) (substVal σ v)
   | ret v => ret (substVal σ v)
   | letin m n => letin (substCom σ m) (substCom (⇑ σ) n)
+  | case v m n => case (substVal σ v) (substCom (⇑ σ) m) (substCom (⇑ σ) n)
 end
 notation:50 v "⦃" σ "⦄" => substVal σ v
 notation:50 m "⦃" σ "⦄" => substCom σ m
@@ -210,7 +220,7 @@ theorem substExt σ τ (h : ∀ x, σ x = τ x) :
   (∀ m, substCom σ m = substCom τ m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing σ τ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [upExt]
 
 def substValExt σ τ h := (substExt σ τ h).left
@@ -222,7 +232,7 @@ theorem substId σ (h : ∀ x, σ x = var x) :
   (∀ m, substCom σ m = m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing σ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [upId]
 
 def substValId := (substId var (λ _ ↦ rfl)).left
@@ -234,7 +244,7 @@ theorem substRename ξ σ τ (h : ∀ x, (σ ∘ ξ) x = τ x) :
   (∀ m, substCom σ (renameCom ξ m) = substCom τ m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing ξ σ τ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [upLift]
 
 def substRenameVal ξ σ := (substRename ξ σ (σ ∘ ξ) (λ _ ↦ rfl)).left
@@ -246,7 +256,7 @@ theorem renameSubst ξ σ τ (h : ∀ x, (renameVal ξ ∘ σ) x = τ x) :
   (∀ m, renameCom ξ (substCom σ m) = substCom τ m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing ξ σ τ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [upRename]
 
 def renameSubstVal ξ σ := (renameSubst ξ σ (renameVal ξ ∘ σ) (λ _ ↦ rfl)).left
@@ -270,7 +280,7 @@ theorem substComp ρ σ τ (h : ∀ x, (substVal ρ ∘ σ) x = τ x) :
   (∀ m, (substCom ρ ∘ substCom σ) m = substCom τ m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing ρ σ τ
-  all_goals simp; try constructor
+  all_goals simp; try repeat' constructor
   all_goals apply_rules [upSubst]
 
 def substValComp ρ σ := (substComp ρ σ (substVal ρ ∘ σ) (λ _ ↦ rfl)).left
@@ -281,7 +291,7 @@ theorem renameToSubst ξ :
   (∀ m, renameCom ξ m = substCom (var ∘ ξ) m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?com⟩
   mutual_induction v, m generalizing ξ
-  all_goals simp [-up] <;> try constructor
+  all_goals simp [-up] <;> try repeat' constructor
   all_goals try rw [← substComExt _ _ (upVar ξ)]
   all_goals apply_rules
 

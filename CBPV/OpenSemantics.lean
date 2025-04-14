@@ -14,6 +14,13 @@ local notation:40 "⟦" B:41 "⟧ᶜ" "↘" P:41 => 𝒞 B P
 mutual
 inductive 𝒱 : ValType → (Val → Prop) → Prop where
   | Unit : ⟦ Unit ⟧ᵛ ↘ (λ v ↦ SNeVal v ∨ v ⤳⋆ unit)
+  | Sum {A₁ A₂ P Q} :
+    ⟦ A₁ ⟧ᵛ ↘ P →
+    ⟦ A₂ ⟧ᵛ ↘ Q →
+    ----------------------------------
+    ⟦ Sum A₁ A₂ ⟧ᵛ ↘ (λ v ↦ SNeVal v ∨
+      (∃ w, v ⤳⋆ inl w ∧ P w) ∨
+      (∃ w, v ⤳⋆ inr w ∧ Q w))
   | U {B P} :
     ⟦ B ⟧ᶜ ↘ P →
     ------------------------------
@@ -41,6 +48,10 @@ theorem interp :
   refine ⟨λ A ↦ ?val, λ B ↦ ?com⟩
   mutual_induction A, B
   case Unit => exact ⟨_, .Unit⟩
+  case Sum ihA ihB =>
+    let ⟨_, hA⟩ := ihA
+    let ⟨_, hB⟩ := ihB
+    exact ⟨_, .Sum hA hB⟩
   case U ih => let ⟨_, h⟩ := ih; exact ⟨_, .U h⟩
   case F ih => let ⟨_, h⟩ := ih; exact ⟨_, .F h⟩
   case Arr ihA ihB =>
@@ -65,15 +76,14 @@ theorem determinism :
   refine ⟨λ {A P Q} h ↦ ?val, λ {B P Q} h ↦ ?com⟩
   mutual_induction h, h
   case Unit => intro h; cases h; rfl
+  case Sum ihA ihB =>
+    intro h; cases h with | Sum hA hB => rw [ihA hA, ihB hB]
   case U ih =>
-    intro h; cases h
-    case U hB => rw [ih hB]
+    intro h; cases h with | U hB => rw [ih hB]
   case F ih =>
-    intro h; cases h
-    case F hA => rw [ih hA]
+    intro h; cases h with | F hA => rw [ih hA]
   case Arr ihA ihB =>
-    intro h; cases h
-    case Arr hA hB => rw [ihA hA, ihB hB]
+    intro h; cases h with | Arr hA hB => rw [ihA hA, ihB hB]
 
 def 𝒱.det : ∀ {A P Q}, ⟦ A ⟧ᵛ ↘ P → ⟦ A ⟧ᵛ ↘ Q → P = Q := determinism.left
 def 𝒞.det : ∀ {B P Q}, ⟦ B ⟧ᶜ ↘ P → ⟦ B ⟧ᶜ ↘ Q → P = Q := determinism.right
@@ -88,6 +98,11 @@ theorem closure :
     cases p
     case inl h  => exact Or.inl (r.closure h)
     case inr r' => exact Or.inr (.trans' r r')
+  case Sum ihA ihB _ _ =>
+    match p with
+    | .inl h => exact Or.inl (r.closure h)
+    | .inr (.inl ⟨_, r', pv⟩) => exact Or.inr (Or.inl ⟨_, .trans' r r', pv⟩)
+    | .inr (.inr ⟨_, r', qv⟩) => exact Or.inr (Or.inr ⟨_, .trans' r r', qv⟩)
   case U ih _ _ => exact ih (.force r) p
   case F =>
     match p with
@@ -108,6 +123,12 @@ theorem adequacy :
     cases sn
     case inl sne => exact .ne sne
     case inr r => rw [r.unit_inv]; constructor
+  case Sum ihl ihr v =>
+    refine ⟨λ sne ↦ Or.inl sne, λ sne ↦ ?_⟩
+    match sne with
+    | .inl h => exact .ne h
+    | .inr (.inl ⟨_, r, pv⟩) => exact r.closure' (SNVal.inl (ihl.right pv))
+    | .inr (.inr ⟨_, r, qv⟩) => exact r.closure' (SNVal.inr (ihr.right qv))
   case U ih v =>
     let ⟨sneval, snval⟩ := @ih (force v)
     exact ⟨λ sne ↦ sneval (.force sne),

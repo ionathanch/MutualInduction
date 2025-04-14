@@ -1,4 +1,4 @@
-import CBPV.Reduction
+import CBPV.Evaluation
 import CBPV.Typing
 
 open ValType ComType Val Com
@@ -12,13 +12,14 @@ mutual
 def 𝒱 (A : ValType) (v : Val) : Prop :=
   match A with
   | .Unit => v = unit
+  | .Sum A₁ A₂ => (∃ w, 𝒱 A₁ w ∧ v = inl w) ∨ (∃ w, 𝒱 A₂ w ∧ v = inr w)
   | U B => ∃ m, ℰ B m ∧ v = thunk m
 
 @[simp]
 def 𝒞 (B : ComType) (m : Com) : Prop :=
   match B with
   | F A => ∃ v, 𝒱 A v ∧ m = ret v
-  | Arr A₁ A₂ => ∃ n, (∀ v, 𝒱 A₁ v → ℰ A₂ (n⦃v⦄)) ∧ m = lam n
+  | Arr A B => ∃ n, (∀ v, 𝒱 A v → ℰ B (n⦃v⦄)) ∧ m = lam n
 
 @[simp]
 def ℰ (B : ComType) (m : Com) := ∃ n, m ⇓ n ∧ 𝒞 B n
@@ -29,9 +30,11 @@ notation:40 m:41 "∈" "⟦" B:41 "⟧ᵉ" => ℰ B m
 
 -- Convenient constructors for the logical relation
 theorem 𝒱.unit : 𝒱 Unit unit := by simp
+theorem 𝒱.inl {v A₁ A₂} (h : 𝒱 A₁ v) : 𝒱 (Sum A₁ A₂) (inl v) := by simp; assumption
+theorem 𝒱.inr {v A₁ A₂} (h : 𝒱 A₂ v) : 𝒱 (Sum A₁ A₂) (inr v) := by simp; assumption
 theorem 𝒱.thunk {m B} (h : ℰ B m) : 𝒱 (U B) (thunk m) := by simp at *; assumption
 theorem 𝒞.ret {v A} (h : 𝒱 A v) : 𝒞 (F A) (ret v) := by simp; assumption
-theorem 𝒞.lam {n A₁ A₂} (h : ∀ v, 𝒱 A₁ v → ℰ A₂ (n⦃v⦄)) : 𝒞 (Arr A₁ A₂) (lam n) := by simp at *; assumption
+theorem 𝒞.lam {n A B} (h : ∀ v, 𝒱 A v → ℰ B (n⦃v⦄)) : 𝒞 (Arr A B) (lam n) := by simp at *; assumption
 
 -- Semantic computations are normal
 theorem 𝒞nf {B m} (h : m ∈ ⟦ B ⟧ᶜ) : nf m :=
@@ -83,6 +86,8 @@ theorem soundness {Γ} :
   all_goals intro σ hσ
   case var mem => exact hσ mem
   case unit => exact 𝒱.unit
+  case inl ih => exact 𝒱.inl (ih σ hσ)
+  case inr ih => exact 𝒱.inr (ih σ hσ)
   case thunk ih => exact 𝒱.thunk (ih σ hσ)
   case force ih =>
     simp at ih
@@ -106,6 +111,17 @@ theorem soundness {Γ} :
     let ⟨_, ⟨rlet, nflet⟩, h⟩ := ih (v +: σ) (semCtxtCons hv hσ)
     rw [substUnion] at rlet
     exact 𝒞bwd (trans' (stepsLet rret) (.trans .ret rlet)) h
+  case case m n _ _ _ _ _ _ ihv ihm ihn =>
+    simp at ihv
+    match ihv σ hσ with
+    | .inl ⟨v, hv, e⟩ =>
+      let hm := ihm (v +: σ) (semCtxtCons hv hσ)
+      simp only [substCom]; rw [e]; rw [substUnion] at hm
+      exact ℰbwd (stepSteps .inl) hm
+    | .inr ⟨v, hv, e⟩ =>
+      let hn := ihn (v +: σ) (semCtxtCons hv hσ)
+      simp only [substCom]; rw [e]; rw [substUnion] at hn
+      exact ℰbwd (stepSteps .inr) hn
 
 -- If a computation does not step, then it is in normal form
 theorem normal {m B} (nr : ∀ {n}, ¬ m ⇒ n) (h : ⬝ ⊢ m ∶ B) : nf m := by

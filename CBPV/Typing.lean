@@ -14,6 +14,14 @@ inductive ValWt : Ctxt → Val → ValType → Prop where
     -------------
     Γ ⊢ var x ∶ A
   | unit {Γ} : Γ ⊢ unit ∶ Unit
+  | inl {Γ v} {A₁ A₂ : ValType} :
+    Γ ⊢ v ∶ A₁ →
+    ---------------------
+    Γ ⊢ inl v ∶ Sum A₁ A₂
+  | inr {Γ v} {A₁ A₂ : ValType} :
+    Γ ⊢ v ∶ A₂ →
+    ---------------------
+    Γ ⊢ inr v ∶ Sum A₁ A₂
   | thunk {Γ m} {B : ComType} :
     Γ ⊢ m ∶ B →
     -----------------
@@ -42,6 +50,12 @@ inductive ComWt : Ctxt → Com → ComType → Prop where
     Γ ∷ A ⊢ n ∶ B →
     -----------------
     Γ ⊢ letin m n ∶ B
+  | case {Γ v m n A₁ A₂} {B : ComType} :
+    Γ ⊢ v ∶ Sum A₁ A₂ →
+    Γ ∷ A₁ ⊢ m ∶ B →
+    Γ ∷ A₂ ⊢ n ∶ B →
+    ------------------
+    Γ ⊢ case v m n ∶ B
 end
 end
 

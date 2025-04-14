@@ -15,9 +15,12 @@ inductive SNeCom : Com → Prop where
   | force {v} : SNeVal v → SNeCom (force v)
   | app {m v} : SNeCom m → SNVal v → SNeCom (app m v)
   | letin {m n} : SNeCom m → SNCom n → SNeCom (letin m n)
+  | case {v m n} : SNeVal v → SNCom m → SNCom n → SNeCom (case v m n)
 
 inductive SNVal : Val → Prop where
   | unit : SNVal unit
+  | inl {v} : SNVal v → SNVal (inl v)
+  | inr {v} : SNVal v → SNVal (inr v)
   | thunk {m} : SNCom m → SNVal (thunk m)
   | ne {v} : SNeVal v → SNVal v
   | red {v w : Val} : v ⤳ w → SNVal w → SNVal v
@@ -29,15 +32,20 @@ inductive SNCom : Com → Prop where
   | red {m n : Com} : m ⤳ n → SNCom n → SNCom m
 
 inductive SRVal : Val → Val → Prop where
+  | inl {v w : Val} : v ⤳ w → inl v ⤳ inl w
+  | inr {v w : Val} : v ⤳ w → inr v ⤳ inr w
   | thunk {m n : Com} : m ⤳ n → thunk m ⤳ thunk n
 
 inductive SRCom : Com → Com → Prop where
   | thunk {m} : force (thunk m) ⤳ m
   | lam {m : Com} {v} : SNVal v → app (lam m) v ⤳ m⦃v⦄
   | ret {v m} : SNVal v → letin (ret v) m ⤳ m⦃v⦄
+  | inl {v m n} : SNCom n → case (inl v) m n ⤳ m⦃v⦄
+  | inr {v m n} : SNCom m → case (inr v) m n ⤳ n⦃v⦄
   | force {v w : Val} : v ⤳ w → force v ⤳ force w
   | app {m n : Com} {v} : m ⤳ n → app m v ⤳ app n v
   | letin {m m' n : Com} : m ⤳ m' → letin m n ⤳ letin m' n
+  | case {v w : Val} {m n} : v ⤳ w → case v m n ⤳ case w m n
 end
 end
 
@@ -48,14 +56,9 @@ notation:40 m:41 "⤳" n:41 => SRCom m n
 theorem SNCom.force_inv {v : Val} (h : SNCom (force v)) : SNVal v := by
   generalize e : force v = m at h
   mutual_induction h generalizing v
-  case motive_1 => exact λ _ _ ↦ True
-  case motive_2 => exact λ _ _ ↦ True
-  case motive_3 => exact λ _ _ ↦ True
-  case motive_5 => exact λ _ _ _ ↦ True
-  case motive_6 => exact λ _ _ _ ↦ True
-  all_goals first | simp | contradiction | subst e
+  all_goals first | contradiction | subst e
   case ne sne => cases sne with | _ snev => exact .ne snev
-  case red sn _ ih r =>
+  case red sn ih r =>
     cases r
     case thunk => exact .thunk sn
     case force r => exact .red r (ih rfl)
@@ -122,15 +125,22 @@ theorem SRComs.letin {m m' n : Com} (r : m ⤳⋆ m') : letin m n ⤳⋆ letin m
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.letin r₁) r₂
 
+theorem SRComs.case {v w : Val} {m n} (r : v ⤳⋆ w) : case v m n ⤳⋆ case w m n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.case r₁) r₂
+
 theorem SRVals.unit_inv {v : Val} (r : v ⤳⋆ .unit) : v = .unit := by
   generalize e : Val.unit = w at r
   induction r
   case refl => rfl
   case trans r _ ih => rw [ih e] at r; subst e; cases r
 
-/-*--------------------------------------
+/-*----------------------------------------
   Backward closure wrt strong reduction
---------------------------------------*-/
+  N.B. SNeComs are *not* backward closed,
+  e.g. force (thunk (force x)) ⤳ force x
+----------------------------------------*-/
 
 theorem SRComs.closure {m n : Com} (r : m ⤳⋆ n) (h : SNCom n) : SNCom m := by
   induction r
@@ -143,6 +153,11 @@ theorem SRVals.closure {v w : Val} (r : v ⤳⋆ w) (h : SNeVal w) : SNeVal v :=
   induction r
   case refl => subst e; constructor
   case trans r _ ih => cases ih e; cases r
+
+theorem SRVals.closure' {v w : Val} (r : v ⤳⋆ w) (h : SNVal w) : SNVal v := by
+  induction r
+  case refl => assumption
+  case trans r _ ih => exact .red r (ih h)
 
 /-*--------------------------------
   Antirenaming and extensionality
@@ -178,7 +193,19 @@ theorem antirenaming {ξ} :
     cases m <;> try contradiction
     injection e with em en
     exact .letin (ihm em) (ihn en)
+  case snecom.case ihv ihm ihn m =>
+    cases m <;> try contradiction
+    injection e with ev em en
+    refine .case (ihv ev) (ihm em) (ihn en)
   case snval.unit v => cases v <;> injection e; constructor
+  case snval.inl ih v =>
+    cases v <;> try contradiction
+    injection e with e
+    exact .inl (ih e)
+  case snval.inr ih v =>
+    cases v <;> try contradiction
+    injection e with e
+    exact .inr (ih e)
   case snval.thunk ih v =>
     cases v <;> try contradiction
     injection e with e
@@ -199,6 +226,16 @@ theorem antirenaming {ξ} :
   case sncom.red ihr ihm _ =>
     let ⟨_, e, r⟩ := ihr e
     exact .red r (ihm (Eq.symm e))
+  case srval.inl ih v =>
+    cases v <;> try contradiction
+    injection e with e
+    let ⟨_, e, r⟩ := ih e; subst e
+    exact ⟨.inl _, rfl, .inl r⟩
+  case srval.inr ih v =>
+    cases v <;> try contradiction
+    injection e with e
+    let ⟨_, e, r⟩ := ih e; subst e
+    exact ⟨.inr _, rfl, .inr r⟩
   case srval.thunk ih v =>
     cases v <;> try contradiction
     injection e with e
@@ -227,6 +264,22 @@ theorem antirenaming {ξ} :
     injection ev with ev
     subst ev em; rw [renameDist]
     exact ⟨_, rfl, .ret (ih rfl)⟩
+  case srcom.inl ih m =>
+    cases m <;> try contradiction
+    injection e with ev em en
+    rename Val => v
+    cases v <;> try contradiction
+    injection ev with ev
+    subst ev em; rw [renameDist]
+    exact ⟨_, rfl, .inl (ih en)⟩
+  case srcom.inr ih m =>
+    cases m <;> try contradiction
+    injection e with ev em en
+    rename Val => v
+    cases v <;> try contradiction
+    injection ev with ev
+    subst ev en; rw [renameDist]
+    exact ⟨_, rfl, .inr (ih em)⟩
   case srcom.force ih m =>
     cases m <;> try contradiction
     injection e with e
@@ -242,18 +295,18 @@ theorem antirenaming {ξ} :
     injection e with em ev
     let ⟨_, em, r⟩ := ih em; subst em ev
     exact ⟨.letin _ _, rfl, .letin r⟩
+  case srcom.case ih m =>
+    cases m <;> try contradiction
+    injection e with ev em en
+    let ⟨w, ev, r⟩ := ih ev; subst ev em en
+    exact ⟨.case _ _ _, rfl, .case r⟩
 
 def SNCom.antirenaming {ξ m} := @(@_root_.antirenaming ξ).right.right.right.left m
 
 theorem extensionality {m x} (h : SNCom (app m (var x))) : SNCom m := by
   generalize e : app m (var x) = m' at h
   mutual_induction h generalizing m x
-  case motive_1 => exact λ _ _ ↦ True
-  case motive_2 => exact λ _ _ ↦ True
-  case motive_3 => exact λ _ _ ↦ True
-  case motive_5 => exact λ _ _ _ ↦ True
-  case motive_6 => exact λ _ _ _ ↦ True
-  all_goals first | simp | contradiction | subst e
+  all_goals first | contradiction | subst e
   case ne h => cases h with | _ snem => exact .ne snem
   case red r =>
     cases r
