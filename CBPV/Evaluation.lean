@@ -33,9 +33,9 @@ theorem evalDet {m n₁ n₂} (r₁ : m ⇒ n₁) (r₂ : m ⇒ n₂) : n₁ = n
   all_goals apply_rules [appCong, letinCong]
   all_goals rename _ ⇒ _ => r; cases r
 
-/-*---------------------
-  Multi-step reduction
----------------------*-/
+/-*----------------------
+  Multi-step evaluation
+----------------------*-/
 
 section
 set_option hygiene false

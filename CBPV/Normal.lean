@@ -4,8 +4,8 @@ open ValType ComType Val Com
 
 section
 set_option hygiene false
-local notation:40 v:41 "⤳" w:41 => SRVal v w
-local notation:40 m:41 "⤳" n:41 => SRCom m n
+local infix:40 "⤳" => SRVal
+local infix:40 "⤳" => SRCom
 
 mutual
 inductive SNeVal : Val → Prop where
@@ -49,8 +49,8 @@ inductive SRCom : Com → Com → Prop where
 end
 end
 
-notation:40 v:41 "⤳" w:41 => SRVal v w
-notation:40 m:41 "⤳" n:41 => SRCom m n
+infix:40 "⤳" => SRVal
+infix:40 "⤳" => SRCom
 
 -- Inversion on strong normalization of `force`
 theorem SNCom.force_inv {v : Val} (h : SNCom (force v)) : SNVal v := by
@@ -69,19 +69,19 @@ theorem SNCom.force_inv {v : Val} (h : SNCom (force v)) : SNVal v := by
 
 section
 set_option hygiene false
-local notation:40 v:41 "⤳⋆" w:41 => SRVals v w
+local infix:40 "⤳⋆" => SRVals
 inductive SRVals : Val → Val → Prop where
   | refl {v : Val} : v ⤳⋆ v
   | trans {u v w : Val} : u ⤳ v → v ⤳⋆ w → u ⤳⋆ w
 
-local notation:40 m:41 "⤳⋆" n:41 => SRComs m n
+local infix:40 "⤳⋆" => SRComs
 inductive SRComs : Com → Com → Prop where
   | refl {m : Com} : m ⤳⋆ m
   | trans {k m n : Com} : k ⤳ m → m ⤳⋆ n → k ⤳⋆ n
 end
 
-notation:40 v:41 "⤳⋆" w:41 => SRVals v w
-notation:40 m:41 "⤳⋆" n:41 => SRComs m n
+infix:40 "⤳⋆" => SRVals
+infix:40 "⤳⋆" => SRComs
 
 @[refl] def SRVals.rfl {v} := @SRVals.refl v
 @[refl] def SRComs.rfl {m} := @SRComs.refl m
