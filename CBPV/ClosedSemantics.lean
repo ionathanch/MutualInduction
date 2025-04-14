@@ -50,7 +50,7 @@ theorem 𝒞ℰ {B m} (h : m ∈ ⟦ B ⟧ᶜ) : m ∈ ⟦ B ⟧ᵉ :=
 theorem ℰbwd {B m n} (r : m ⇒⋆ n) (h : n ∈ ⟦ B ⟧ᵉ) : m ∈ ⟦ B ⟧ᵉ := by
   unfold ℰ at *
   let ⟨n', ⟨r', nfn⟩, h⟩ := h
-  refine ⟨n', ⟨trans' r r', nfn⟩, h⟩
+  refine ⟨n', ⟨.trans' r r', nfn⟩, h⟩
 theorem 𝒞bwd {B m n} (r : m ⇒⋆ n) (h : n ∈ ⟦ B ⟧ᶜ) : m ∈ ⟦ B ⟧ᵉ := ℰbwd r (𝒞ℰ h)
 
 /-*----------------
@@ -92,7 +92,7 @@ theorem soundness {Γ} :
   case force ih =>
     simp at ih
     let ⟨_, ⟨_, ⟨r, _⟩, h⟩, e⟩ := ih σ hσ
-    let rf := Steps.trans .force r
+    let rf : _ ⇒⋆ _ := .trans .force r
     rw [← e] at rf
     exact 𝒞bwd rf h
   case lam ih =>
@@ -103,25 +103,25 @@ theorem soundness {Γ} :
     simp at ihm
     let ⟨_, ⟨rlam, _⟩, _, h, e⟩ := ihm σ hσ; subst e
     let ⟨_, ⟨rval, _⟩, h⟩ := h _ (ihv σ hσ)
-    exact 𝒞bwd (trans' (stepsApp rlam) (.trans .lam rval)) h
+    exact 𝒞bwd (.trans' (.app rlam) (.trans .lam rval)) h
   case ret ih => exact 𝒞ℰ (𝒞.ret (ih σ hσ))
   case letin ihret ih =>
     simp at ihret ih
     let ⟨_, ⟨rret, _⟩, v, hv, e⟩ := ihret σ hσ; subst e
     let ⟨_, ⟨rlet, nflet⟩, h⟩ := ih (v +: σ) (semCtxtCons hv hσ)
     rw [substUnion] at rlet
-    exact 𝒞bwd (trans' (stepsLet rret) (.trans .ret rlet)) h
+    exact 𝒞bwd (.trans' (.let rret) (.trans .ret rlet)) h
   case case m n _ _ _ _ _ _ ihv ihm ihn =>
     simp at ihv
     match ihv σ hσ with
     | .inl ⟨v, hv, e⟩ =>
       let hm := ihm (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hm
-      exact ℰbwd (stepSteps .inl) hm
+      exact ℰbwd (.once .inl) hm
     | .inr ⟨v, hv, e⟩ =>
       let hn := ihn (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hn
-      exact ℰbwd (stepSteps .inr) hn
+      exact ℰbwd (.once .inr) hn
 
 -- If a computation does not step, then it is in normal form
 theorem normal {m B} (nr : ∀ {n}, ¬ m ⇒ n) (h : ⬝ ⊢ m ∶ B) : nf m := by
@@ -139,4 +139,4 @@ theorem normalization {m : Com} {B : ComType} (h : ⬝ ⊢ m ∶ B) : SN m := by
   simp at mB
   let ⟨_, ⟨r, nfm⟩, _⟩ := mB var semCtxtNil
   rw [substComId] at r
-  exact stepsSN r nfm
+  exact r.sn nfm
