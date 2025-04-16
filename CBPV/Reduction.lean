@@ -352,6 +352,13 @@ theorem StepCom.SN.ret {v} (h : StepVal.SN v) : StepCom.SN (.ret v) := by
   SN on redexes
 --------------*-/
 
+theorem StepCom.SN.antisubstitution {m} {v : Val} (snm : StepCom.SN (m⦃v⦄)) (snv : StepVal.SN v) : StepCom.SN m := by
+  generalize e : (m⦃v⦄) = n at snm
+  induction snm generalizing m v; subst e
+  case sn h ih =>
+  constructor; intro _ r
+  apply ih (.subst _ r) snv rfl
+
 theorem StepCom.SN.force_thunk {m} (snm : StepCom.SN m) : StepCom.SN (.force (.thunk m)) := by
   induction snm
   constructor; intro _ r; cases r
@@ -359,59 +366,77 @@ theorem StepCom.SN.force_thunk {m} (snm : StepCom.SN m) : StepCom.SN (.force (.t
   case a.force ih _ r =>
     cases r with | thunk r => exact ih r
 
-theorem StepCom.SN.app_lam {m v} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v⦄)) : StepCom.SN (Com.app (Com.lam m) v) := by
-  generalize e : (m⦃v⦄) = n at snm
-  induction snm generalizing m v; subst e
+theorem StepCom.SN.app_lam' {m v} (snm : StepCom.SN m) (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)): StepCom.SN (Com.app (Com.lam m) v) := by
+  induction snv generalizing m
+  induction snm
+  case sn.sn ihv _ hm ihm =>
   constructor; intro _ r; cases r
-  case a.β h _ => exact .sn h
-  case a.app₁ ih _ r =>
+  case a.β h _ => exact snmv
+  case a.app₁ r =>
     cases r with | lam r =>
-    exact ih (.subst _ r) snv rfl
-  case a.app₂ ih _ r =>
-    cases snv with | sn h =>
-    refine ih ?_ (h r) rfl; sorry -- substitution
+    cases snmv with | sn h =>
+    exact ihm r (h (.subst _ r))
+  case a.app₂ m _ r =>
+    let snnv := (StepComs.replace r).SN snmv
+    exact ihv r (.sn hm) snnv
 
-theorem StepCom.SN.letin_ret {m v} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v⦄)) : StepCom.SN (Com.letin (Com.ret v) m) := by
-  generalize e : (m⦃v⦄) = n at snm
-  induction snm generalizing m v; subst e
+theorem StepCom.SN.app_lam {m v} (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)): StepCom.SN (Com.app (Com.lam m) v) :=
+  .app_lam' (.antisubstitution snmv snv) snv snmv
+
+theorem StepCom.SN.letin_ret' {m v} (snm : StepCom.SN m) (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)) : StepCom.SN (Com.letin (Com.ret v) m) := by
+  induction snv generalizing m
+  induction snm
+  case sn.sn ihv _ hm ihm =>
   constructor; intro _ r; cases r
-  case a.ζ h _ => exact .sn h
+  case a.ζ h _ => exact snmv
   case a.letin₁ ih _ r =>
     cases r with | ret r =>
-    cases snv with | sn h =>
-    refine ih ?_ (h r) rfl; sorry -- substitution
-  case a.letin₂ ih _ r =>
-    exact ih (.subst _ r) snv rfl
+    let snnv := (StepComs.replace r).SN snmv
+    exact ihv r (.sn hm) snnv
+  case a.letin₂ r =>
+    cases snmv with | sn h =>
+    exact ihm r (h (.subst _ r))
 
-theorem StepCom.SN.case_inl {v m n} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v⦄)) (snn : StepCom.SN n) : StepCom.SN (.case (.inl v) m n) := by
-  generalize e : (m⦃v⦄) = m' at snm
-  induction snm generalizing v m n; subst e
+theorem StepCom.SN.letin_ret {m v} (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)) : StepCom.SN (Com.letin (Com.ret v) m) :=
+  .letin_ret' (.antisubstitution snmv snv) snv snmv
+
+theorem StepCom.SN.case_inl' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (snn : StepCom.SN n) (snmv : StepCom.SN (m⦃v⦄)) : StepCom.SN (.case (.inl v) m n) := by
+  induction snv generalizing m n
+  induction snm generalizing n
+  induction snn
+  case sn.sn ihv _ hm ihm _ hn ihn =>
   constructor; intro _ r; cases r
-  case a.ιl h _ => exact .sn h
+  case a.ιl h _ => exact snmv
   case a.case ih _ r =>
     cases r with | inl r =>
-    cases snv with | sn h =>
-    refine ih ?_ (h r) snn rfl; sorry -- substitution
-  case a.case₁ ih _ r =>
-    exact ih (.subst _ r) snv snn rfl
-  case a.case₂ ih _ r =>
-    cases snn with | sn h =>
-    refine ih ?_ snv (h r) rfl; sorry -- substitution
+    let snnv := (StepComs.replace r).SN snmv
+    exact ihv r (.sn hm) (.sn hn) snnv
+  case a.case₁ r =>
+    cases snmv with | sn h =>
+    exact ihm r (.sn hn) (h (.subst _ r))
+  case a.case₂ r => exact ihn r
 
-theorem StepCom.SN.case_inr {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (snn : StepCom.SN (n⦃v⦄)) : StepCom.SN (.case (.inr v) m n) := by
-  generalize e : (n⦃v⦄) = n' at snn
-  induction snn generalizing v m n; subst e
+theorem StepCom.SN.case_inl {v m n} (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)) (snn : StepCom.SN n) : StepCom.SN (.case (.inl v) m n) :=
+  .case_inl' snv (.antisubstitution snmv snv) snn snmv
+
+theorem StepCom.SN.case_inr' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (snn : StepCom.SN n) (snnv : StepCom.SN (n⦃v⦄)) : StepCom.SN (.case (.inr v) m n) := by
+  induction snv generalizing m n
+  induction snm generalizing n
+  induction snn
+  case sn.sn ihv _ hm ihm _ hn ihn =>
   constructor; intro _ r; cases r
-  case a.ιr h _ => exact .sn h
+  case a.ιr h _ => exact snnv
   case a.case ih _ r =>
     cases r with | inr r =>
-    cases snv with | sn h =>
-    refine ih ?_ (h r) snm rfl; sorry -- substitution
-  case a.case₁ ih _ r =>
-    cases snm with | sn h =>
-    refine ih ?_ snv (h r) rfl; sorry -- substitution
-  case a.case₂ ih _ r =>
-    exact ih (.subst _ r) snv snm rfl
+    let snnv := (StepComs.replace r).SN snnv
+    exact ihv r (.sn hm) (.sn hn) snnv
+  case a.case₁ r => exact ihm r (.sn hn) snnv
+  case a.case₂ r =>
+    cases snnv with | sn h =>
+    exact ihn r (h (.subst _ r))
+
+theorem StepCom.SN.case_inr {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (snnv : StepCom.SN (n⦃v⦄)) : StepCom.SN (.case (.inr v) m n) :=
+  .case_inr' snv snm (.antisubstitution snnv snv) snnv
 
 /-*-----------------
   Strong reduction
