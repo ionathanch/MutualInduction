@@ -153,6 +153,13 @@ theorem StepCom.SN.lam_inv {m} (h : StepCom.SN (.lam m)) : StepCom.SN m := by
   constructor; intro _ r
   exact ih (.lam r) rfl
 
+theorem StepCom.SN.force_inv {v} (h : StepCom.SN (.force v)) : StepVal.SN v := by
+  generalize e : Com.force v = m at h
+  induction h generalizing v; subst e
+  case sn ih =>
+  constructor; intro _ r
+  exact ih (.force r) rfl
+
 theorem StepCom.SN.app_inv {m v} (h : StepCom.SN (.app m v)) : StepCom.SN m := by
   generalize e : Com.app m v = n at h
   induction h generalizing m; subst e
@@ -261,10 +268,9 @@ theorem StepCom.SN.case_inr {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (s
   case a.case₂ ih _ r =>
     refine ih ?_ snv snm rfl; sorry -- substitution
 
-/-*------------------------
-  Backward closure of SN
-  (depends on confluence)
-------------------------*-/
+/-*-----------------
+  Strong reduction
+-----------------*-/
 
 section
 set_option hygiene false
@@ -280,6 +286,10 @@ inductive StepSN : Com → Com → Prop where
 end
 infix:40 "⤳ⁿ" => StepSN
 
+/-*-----------------------------------------------
+  Confluence of single-step and strong reduction
+-----------------------------------------------*-/
+
 theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) : (∃ m', n₁ ⤳ⁿ m' ∧ n₂ ⤳ᶜ m') ∨ n₁ = n₂ := by
   induction r₂ generalizing n₁ <;> cases r₁
   case lam.β => exact .inr rfl
@@ -294,12 +304,16 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     cases ih r
     case inl h =>
       let ⟨_, r₁', r₂'⟩ := h
-      refine .inl ⟨_, .app snv r₁', .app₁ r₂'⟩
+      exact .inl ⟨_, .app snv r₁', .app₁ r₂'⟩
     case inr e => subst e; exact .inr rfl
   case app.app₂ snv r₁' _ _ r₂' =>
     cases snv; case sn h =>
-    refine .inl ⟨_, .app (h r₂') r₁', .app₂ r₂'⟩
+    exact .inl ⟨_, .app (h r₂') r₁', .app₂ r₂'⟩
   all_goals sorry
+
+/-*-------------------------------------
+  Backward closure of strong reduction
+-------------------------------------*-/
 
 theorem StepSN.closure {m n} (r : m ⤳ⁿ n) (snn : StepCom.SN n) : StepCom.SN m := by
   induction r

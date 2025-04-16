@@ -105,10 +105,9 @@ theorem SRs.trans' {k m n : Com} (r₁ : k ⤳⋆ m) (r₂ : m ⤳⋆ n) : k ⤳
 instance : Trans SRs SRs SRs where
   trans := SRs.trans'
 
-/-*--------------------------------
-  Congruence and inversion lemmas
-  on strong reduction as needed
---------------------------------*-/
+/-*-------------------------------
+  Congruence on strong reduction
+-------------------------------*-/
 
 theorem SRs.app {m n : Com} {v} (r : m ⤳⋆ n) (snv : SNVal v): app m v ⤳⋆ app n v := by
   induction r
