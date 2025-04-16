@@ -1,4 +1,4 @@
-import CBPV.Normal
+import CBPV.NormalInd
 
 open ValType ComType Val Com
 

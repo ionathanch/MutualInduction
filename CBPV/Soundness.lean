@@ -129,17 +129,3 @@ theorem soundness {Γ} :
           _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snv snm snn)
           _ ⤳⋆ n⦃w +: σ⦄                      := by rw [← substUnion]
       exact ⟨R, hB, hB.closure r' rm⟩
-
-theorem normalization {Γ} :
-  (∀ {v : Val} {A}, Γ ⊢ v ∶ A → SNVal v) ∧
-  (∀ {m : Com} {B}, Γ ⊢ m ∶ B → SNCom m) := by
-  let ⟨soundVal, soundCom⟩ := @soundness Γ
-  refine ⟨λ h ↦ ?val, λ h ↦ ?com⟩
-  case val =>
-    let ⟨_, hA, pv⟩ := soundVal _ _ h _ semCtxtVar
-    rw [substValId] at pv
-    exact hA.snVal pv
-  case com =>
-    let ⟨_, hB, pm⟩ := soundCom _ _ h _ semCtxtVar
-    rw [substComId] at pm
-    exact hB.snCom pm
