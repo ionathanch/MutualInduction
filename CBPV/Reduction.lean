@@ -316,40 +316,38 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
 -------------------------------------*-/
 
 theorem closure_app {v m n} (r₁ : m ⤳ⁿ n) (snm : StepCom.SN m) (snv : StepVal.SN v) (snapp : StepCom.SN (.app n v)) : StepCom.SN (.app m v) := by
+  induction snv generalizing m n
+  induction snm generalizing n
+  case sn ihv _ hv ihm =>
   constructor; intro _ r; cases r
   case a.β => cases r₁
   case a.app₁ r₂ =>
     cases confluence r₂ r₁
     case inl h =>
       let ⟨_, r₂', r₁'⟩ := h
-      cases snm with | sn hm =>
       cases snapp with | sn happ =>
-      exact closure_app r₂' (hm r₂) snv (happ (.app₁ r₁'))
+      exact ihm r₂ r₂' (happ (.app₁ r₁'))
     case inr e => subst e; exact snapp
   case a.app₂ r =>
-    cases snv with | sn hv =>
     cases snapp with | sn happ =>
-    exact closure_app r₁ snm (hv r) (happ (.app₂ r))
-termination_by sizeOf snm + sizeOf snv
-decreasing_by all_goals sorry
+    exact ihv r r₁ (.sn hv) (happ (.app₂ r))
 
 theorem closure_letin {m m' n} (r₁ : m ⤳ⁿ m') (snm : StepCom.SN m) (snn : StepCom.SN n) (snlet : StepCom.SN (.letin m' n)) : StepCom.SN (.letin m n) := by
+  induction snn generalizing m m'
+  induction snm generalizing m'
+  case sn ihn _ hn ihm =>
   constructor; intro _ r; cases r
   case a.ζ => cases r₁
   case a.letin₁ r₂ =>
     cases confluence r₂ r₁
     case inl h =>
       let ⟨_, r₂', r₁'⟩ := h
-      cases snm with | sn hm =>
       cases snlet with | sn hlet =>
-      exact closure_letin r₂' (hm r₂) snn (hlet (.letin₁ r₁'))
+      exact ihm r₂ r₂' (hlet (.letin₁ r₁'))
     case inr e => subst e; exact snlet
   case a.letin₂ r =>
-    cases snn with | sn hn =>
     cases snlet with | sn hlet =>
-    exact closure_letin r₁ snm (hn r) (hlet (.letin₂ r))
-termination_by sizeOf snm + sizeOf snn
-decreasing_by all_goals sorry
+    exact ihn r r₁ (.sn hn) (hlet (.letin₂ r))
 
 theorem StepSN.closure {m n} (r : m ⤳ⁿ n) (snn : StepCom.SN n) : StepCom.SN m := by
   induction r
