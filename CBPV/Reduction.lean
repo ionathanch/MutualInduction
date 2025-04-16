@@ -391,45 +391,36 @@ def StepCom.preservation {m n} := @_root_.preservation.right m n
 ----------------------------------*-/
 
 theorem StepCom.SN.app {m v} (nem : NeCom m) (snm : StepCom.SN m) (snv : StepVal.SN v) : StepCom.SN (app m v) := by
+  induction snm generalizing v
+  induction snv
+  case sn.sn ihv _ hv ihm =>
   constructor; intro _ r
   cases r
   case a.β => cases nem
-  case a.app₁ r =>
-    cases snm
-    case sn h => exact .app (r.preservation nem) (h r) snv
-  case a.app₂ r =>
-    cases snv
-    case sn h => exact .app nem snm (h r)
-termination_by sizeOf snm + sizeOf snv
-decreasing_by all_goals sorry
+  case a.app₁ r => exact ihv r (r.preservation nem) (.sn hv)
+  case a.app₂ r => exact ihm r
 
 theorem StepCom.SN.letin {m n} (nem : NeCom m) (snm : StepCom.SN m) (snn : StepCom.SN n) : StepCom.SN (letin m n) := by
+  induction snm generalizing n
+  induction snn
+  case sn.sn ihm _ hm ihn =>
   constructor; intro _ r
   cases r
   case a.ζ => cases nem
-  case a.letin₁ r =>
-    cases snm
-    case sn h => exact .letin (r.preservation nem) (h r) snn
-  case a.letin₂ r =>
-    cases snn
-    case sn h => exact .letin nem snm (h r)
-termination_by sizeOf snm + sizeOf snn
-decreasing_by all_goals sorry
+  case a.letin₁ r => exact ihm r (r.preservation nem) (.sn hm)
+  case a.letin₂ r => exact ihn r
 
 theorem StepCom.SN.case {v m n} (nev : NeVal v) (snm : StepCom.SN m) (snn : StepCom.SN n) : StepCom.SN (.case v m n) := by
+  induction snm generalizing n
+  induction snn
+  case sn.sn ihm _ hm ihn =>
   constructor; intro _ r
   cases r
   case a.ιl => cases nev; contradiction
   case a.ιr => cases nev; contradiction
   case a.case r => cases r <;> cases nev <;> contradiction
-  case a.case₁ r =>
-    cases snm
-    case sn h => exact .case nev (h r) snn
-  case a.case₂ r =>
-    cases snn
-    case sn h => exact .case nev snm (h r)
-termination_by sizeOf snm + sizeOf snn
-decreasing_by all_goals sorry
+  case a.case₁ r => exact ihm r (.sn hm)
+  case a.case₂ r => exact ihn r
 
 /-*--------------------------
   Soundness of SNCom/SNVal
