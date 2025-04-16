@@ -62,6 +62,7 @@ infix:40 "⤳ᶜ" => StepCom
 
 /-*---------------------------------
   Renaming and substitution lemmas
+  on single-step reduction
 ---------------------------------*-/
 
 theorem stepRenaming ξ :
@@ -122,6 +123,20 @@ theorem StepComs.trans' {a b c} (r₁ : a ⤳⋆ᶜ b) (r₂ : b ⤳⋆ᶜ c) : 
   case refl => exact r₂
   case trans r₁ _ ih => exact .trans r₁ (ih r₂)
 
+/-*--------------------------------------------
+  Substitution lemmas on multi-step reduction
+--------------------------------------------*-/
+
+theorem StepVals.subst {v w} (σ : Nat → Val) (r : v ⤳⋆ᵛ w) : v⦃σ⦄ ⤳⋆ᵛ w⦃σ⦄ := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
+
+theorem StepComs.subst {m n} (σ : Nat → Val) (r : m ⤳⋆ᶜ n) : m⦃σ⦄ ⤳⋆ᶜ n⦃σ⦄ := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
+
 /-*-----------------------------------------
   Congruence rules on multi-step reduction
 -----------------------------------------*-/
@@ -135,6 +150,16 @@ theorem StepComs.app₂ {m v w} (r : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app m w 
   induction r
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.app₂ r₁) r₂
+
+theorem StepComs.letin₁ {m m' n} (r : m ⤳⋆ᶜ m') : letin m n ⤳⋆ᶜ letin m' n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.letin₁ r₁) r₂
+
+theorem StepComs.letin₂ {m n n'} (r : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ letin m n' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.letin₂ r₁) r₂
 
 /-*---------------------------------
   Traditional strong normalization
@@ -276,7 +301,7 @@ theorem StepCom.SN.case_inl {v m n} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃
     cases snv with | sn h =>
     refine ih ?_ (h r) snn rfl; sorry -- substitution
   case a.case₁ ih _ r =>
-    refine ih ?_ snv snn rfl; sorry -- substitution
+    exact ih (.subst _ r) snv snn rfl
   case a.case₂ ih _ r =>
     cases snn with | sn h =>
     refine ih ?_ snv (h r) rfl; sorry -- substitution
@@ -294,7 +319,7 @@ theorem StepCom.SN.case_inr {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (s
     cases snm with | sn h =>
     refine ih ?_ snv (h r) rfl; sorry -- substitution
   case a.case₂ ih _ r =>
-    refine ih ?_ snv snm rfl; sorry -- substitution
+    exact ih (.subst _ r) snv snm rfl
 
 /-*-----------------
   Strong reduction
@@ -318,15 +343,15 @@ infix:40 "⤳ⁿ" => StepSN
   Confluence of single-step and strong reduction
 -----------------------------------------------*-/
 
-theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) : (∃ m', n₁ ⤳ⁿ m' ∧ n₂ ⤳ᶜ m') ∨ n₁ = n₂ := by
+theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) : (∃ m', n₁ ⤳ⁿ m' ∧ n₂ ⤳⋆ᶜ m') ∨ n₁ = n₂ := by
   induction r₂ generalizing n₁ <;> cases r₁
   case thunk.π => exact .inr rfl
   case thunk.force r =>
-    cases r with | thunk r => exact .inl ⟨_, .thunk, r⟩
+    cases r with | thunk r => exact .inl ⟨_, .thunk, .once r⟩
   case lam.β => exact .inr rfl
   case lam.app₁ snv _ r =>
     cases r with | lam r =>
-    exact .inl ⟨_, .lam snv, .subst _ r⟩
+    exact .inl ⟨_, .lam snv, .subst _ (.once r)⟩
   case lam.app₂ snv _ r =>
     cases snv with | sn h =>
     refine .inl ⟨_, .lam (h r), ?_⟩; sorry -- substitution
@@ -336,7 +361,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     cases snv with | sn h =>
     refine .inl ⟨_, .ret (h r), ?_⟩; sorry -- substitution
   case ret.letin₂ snv _ r =>
-    exact .inl ⟨_, .ret snv, .subst _ r⟩
+    exact .inl ⟨_, .ret snv, .subst _ (.once r)⟩
   case inl.ιl => exact .inr rfl
   case inl.case snv snm snn _ r =>
     cases r with | inl r =>
@@ -344,10 +369,10 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     refine .inl ⟨_, .inl (h r) snm snn, ?_⟩; sorry -- substitution
   case inl.case₁ snv snm snn _ r =>
     cases snm with | sn h =>
-    exact .inl ⟨_, .inl snv (h r) snn, .subst _ r⟩
+    exact .inl ⟨_, .inl snv (h r) snn, .subst _ (.once r)⟩
   case inl.case₂ snv snm snn _ r =>
     cases snn with | sn h =>
-    refine .inl ⟨_, .inl snv snm (h r), ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inl snv snm (h r), .refl⟩
   case inr.ιr => exact .inr rfl
   case inr.case snv snm snn _ r =>
     cases r with | inr r =>
@@ -355,10 +380,10 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     refine .inl ⟨_, .inr (h r) snm snn, ?_⟩; sorry -- substitution
   case inr.case₁ snv snm snn _ r =>
     cases snm with | sn h =>
-    refine .inl ⟨_, .inr snv (h r) snn, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inr snv (h r) snn, .refl⟩
   case inr.case₂ snv snm snn _ r =>
     cases snn with | sn h =>
-    exact .inl ⟨_, .inr snv snm (h r), .subst _ r⟩
+    exact .inl ⟨_, .inr snv snm (h r), .subst _ (.once r)⟩
   case app.β r ih => cases r
   case app.app₁ snv _ ih _ r =>
     cases ih r
@@ -368,7 +393,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     case inr e => subst e; exact .inr rfl
   case app.app₂ snv r₁' _ _ r₂' =>
     cases snv with | sn h =>
-    exact .inl ⟨_, .app (h r₂') r₁', .app₂ r₂'⟩
+    exact .inl ⟨_, .app (h r₂') r₁', .app₂ (.once r₂')⟩
   case letin.ζ r _ => cases r
   case letin.letin₁ snn _ ih _ r =>
     cases ih r
@@ -378,7 +403,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     case inr e => subst e; exact .inr rfl
   case letin.letin₂ snn r₁ ih _ r₂ =>
     cases snn with | sn h =>
-    refine .inl ⟨_, .letin (h r₂) r₁, .letin₂ r₂⟩
+    exact .inl ⟨_, .letin (h r₂) r₁, .letin₂ (.once r₂)⟩
 
 /-*-------------------------------------
   Backward closure of strong reduction
@@ -387,15 +412,15 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
 theorem closure_app {v m n} (r₁ : m ⤳ⁿ n) (snm : StepCom.SN m) (snv : StepVal.SN v) (snapp : StepCom.SN (.app n v)) : StepCom.SN (.app m v) := by
   induction snv generalizing m n
   induction snm generalizing n
-  case sn ihv _ hv ihm =>
+  case sn v _ ihv _ hv ihm =>
   constructor; intro _ r; cases r
   case a.β => cases r₁
   case a.app₁ r₂ =>
     cases confluence r₂ r₁
     case inl h =>
       let ⟨_, r₂', r₁'⟩ := h
-      cases snapp with | sn happ =>
-      exact ihm r₂ r₂' (happ (.app₁ r₁'))
+      let r₁'' := StepComs.app₁ (v := v) r₁'
+      exact ihm r₂ r₂' (r₁''.SN snapp)
     case inr e => subst e; exact snapp
   case a.app₂ r =>
     cases snapp with | sn happ =>
@@ -404,15 +429,15 @@ theorem closure_app {v m n} (r₁ : m ⤳ⁿ n) (snm : StepCom.SN m) (snv : Step
 theorem closure_letin {m m' n} (r₁ : m ⤳ⁿ m') (snm : StepCom.SN m) (snn : StepCom.SN n) (snlet : StepCom.SN (.letin m' n)) : StepCom.SN (.letin m n) := by
   induction snn generalizing m m'
   induction snm generalizing m'
-  case sn ihn _ hn ihm =>
+  case sn n _ ihn _ hn ihm =>
   constructor; intro _ r; cases r
   case a.ζ => cases r₁
   case a.letin₁ r₂ =>
     cases confluence r₂ r₁
     case inl h =>
       let ⟨_, r₂', r₁'⟩ := h
-      cases snlet with | sn hlet =>
-      exact ihm r₂ r₂' (hlet (.letin₁ r₁'))
+      let r₁'' := StepComs.letin₁ (n := n) r₁'
+      exact ihm r₂ r₂' (r₁''.SN snlet)
     case inr e => subst e; exact snlet
   case a.letin₂ r =>
     cases snlet with | sn hlet =>
