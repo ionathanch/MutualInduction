@@ -2,7 +2,7 @@ import CBPV.Soundness
 import CBPV.NormalAcc
 
 /-*--------------------------------------------
-  Inductive normaliation of well typed terms
+  Inductive normalization of well typed terms
   via soundness of typing wrt semantic typing
 --------------------------------------------*-/
 
