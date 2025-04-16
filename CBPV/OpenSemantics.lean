@@ -13,14 +13,14 @@ local notation:40 "⟦" B:41 "⟧ᶜ" "↘" P:41 => 𝒞 B P
 
 mutual
 inductive 𝒱 : ValType → (Val → Prop) → Prop where
-  | Unit : ⟦ Unit ⟧ᵛ ↘ (λ v ↦ SNeVal v ∨ v ⤳⋆ unit)
+  | Unit : ⟦ Unit ⟧ᵛ ↘ (λ v ↦ SNeVal v ∨ v = unit)
   | Sum {A₁ A₂ P Q} :
     ⟦ A₁ ⟧ᵛ ↘ P →
     ⟦ A₂ ⟧ᵛ ↘ Q →
     ----------------------------------
     ⟦ Sum A₁ A₂ ⟧ᵛ ↘ (λ v ↦ SNeVal v ∨
-      (∃ w, v ⤳⋆ inl w ∧ P w) ∨
-      (∃ w, v ⤳⋆ inr w ∧ Q w))
+      (∃ w, v = inl w ∧ P w) ∨
+      (∃ w, v = inr w ∧ Q w))
   | U {B P} :
     ⟦ B ⟧ᶜ ↘ P →
     ------------------------------
@@ -65,9 +65,9 @@ def ComType.interp : ∀ B, ∃ P, ⟦ B ⟧ᶜ ↘ P := _root_.interp.right
 /-*-----------------------------------------------------
   Properties of the logical relation:
   * Interpretation of a type is deterministic
-  * Backward closure wrt strong normalization
   * Interpretations contain all strongly neutral terms
   * Terms in interpretations are strongly normalizing
+  * Backward closure wrt strong reduction
 -----------------------------------------------------*-/
 
 theorem determinism :
@@ -88,31 +88,6 @@ theorem determinism :
 def 𝒱.det : ∀ {A P Q}, ⟦ A ⟧ᵛ ↘ P → ⟦ A ⟧ᵛ ↘ Q → P = Q := determinism.left
 def 𝒞.det : ∀ {B P Q}, ⟦ B ⟧ᶜ ↘ P → ⟦ B ⟧ᶜ ↘ Q → P = Q := determinism.right
 
-theorem closure :
-  (∀ {A P} {v w : Val}, ⟦ A ⟧ᵛ ↘ P → v ⤳⋆ w → P w → P v) ∧
-  (∀ {B P} {m n : Com}, ⟦ B ⟧ᶜ ↘ P → m ⤳⋆ n → P n → P m) := by
-  refine ⟨λ h ↦ ?val, λ h ↦ ?com⟩
-  mutual_induction h, h
-  all_goals intro r p
-  case Unit =>
-    cases p
-    case inl h  => exact Or.inl (r.closure h)
-    case inr r' => exact Or.inr (.trans' r r')
-  case Sum ihA ihB _ _ =>
-    match p with
-    | .inl h => exact Or.inl (r.closure h)
-    | .inr (.inl ⟨_, r', pv⟩) => exact Or.inr (Or.inl ⟨_, .trans' r r', pv⟩)
-    | .inr (.inr ⟨_, r', qv⟩) => exact Or.inr (Or.inr ⟨_, .trans' r r', qv⟩)
-  case U ih _ _ => exact ih (.force r) p
-  case F =>
-    match p with
-    | .inl ⟨_, r', sne⟩ => exact Or.inl ⟨_, .trans' r r', sne⟩
-    | .inr ⟨_, r', pv⟩  => exact Or.inr ⟨_, .trans' r r', pv⟩
-  case Arr ih _ _ => exact λ v pv ↦ ih (.app r) (p v pv)
-
-def 𝒱.closure : ∀ {A P} {v w : Val}, ⟦ A ⟧ᵛ ↘ P → v ⤳⋆ w → P w → P v := _root_.closure.left
-def 𝒞.closure : ∀ {B P} {m n : Com}, ⟦ B ⟧ᶜ ↘ P → m ⤳⋆ n → P n → P m := _root_.closure.right
-
 theorem adequacy :
   (∀ {A P} {v : Val}, ⟦ A ⟧ᵛ ↘ P → (SNeVal v → P v) ∧ (P v → SNVal v)) ∧
   (∀ {B P} {m : Com}, ⟦ B ⟧ᶜ ↘ P → (SNeCom m → P m) ∧ (P m → SNCom m)) := by
@@ -121,14 +96,14 @@ theorem adequacy :
   case Unit =>
     refine ⟨λ sne ↦ Or.inl sne, λ sn ↦ ?_⟩
     cases sn
-    case inl sne => exact .ne sne
-    case inr r => rw [r.unit_inv]; constructor
+    case inl sne => let ⟨_, e⟩ := sne; subst e; exact .var
+    case inr e => subst e; constructor
   case Sum ihl ihr v =>
     refine ⟨λ sne ↦ Or.inl sne, λ sne ↦ ?_⟩
     match sne with
-    | .inl h => exact .ne h
-    | .inr (.inl ⟨_, r, pv⟩) => exact r.closure' (SNVal.inl (ihl.right pv))
-    | .inr (.inr ⟨_, r, qv⟩) => exact r.closure' (SNVal.inr (ihr.right qv))
+    | .inl h => let ⟨_, e⟩ := h; subst e; exact .var
+    | .inr (.inl ⟨_, e, pv⟩) => subst e; exact .inl (ihl.right pv)
+    | .inr (.inr ⟨_, e, qv⟩) => subst e; exact .inr (ihr.right qv)
   case U ih v =>
     let ⟨sneval, snval⟩ := @ih (force v)
     exact ⟨λ sne ↦ sneval (.force sne),
@@ -149,3 +124,12 @@ def 𝒱.sneVal {A P v} (h : ⟦ A ⟧ᵛ ↘ P) : SNeVal v → P v := (adequacy
 def 𝒞.sneCom {B P m} (h : ⟦ B ⟧ᶜ ↘ P) : SNeCom m → P m := (adequacy.right h).left
 def 𝒱.snVal {A P v} (h : ⟦ A ⟧ᵛ ↘ P) : P v → SNVal v := (adequacy.left h).right
 def 𝒞.snCom {B P m} (h : ⟦ B ⟧ᶜ ↘ P) : P m → SNCom m := (adequacy.right h).right
+
+theorem 𝒞.closure {B P} {m n : Com} (h : ⟦ B ⟧ᶜ ↘ P) (r : m ⤳⋆ n) : P n → P m := by
+  mutual_induction h generalizing m n
+  all_goals intro p
+  case F =>
+    match p with
+    | .inl ⟨_, r', sne⟩ => exact Or.inl ⟨_, .trans' r r', sne⟩
+    | .inr ⟨_, r', pv⟩  => exact Or.inr ⟨_, .trans' r r', pv⟩
+  case Arr hA _ ih => exact λ v pv ↦ ih (.app r (hA.snVal pv)) (p v pv)

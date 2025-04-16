@@ -31,7 +31,7 @@ notation:40 Γ:41 "⊨" m:41 "∶" B:41 => semCom Γ m B
 theorem SNup {Γ σ A B P} {m : Com}
   (hσ : Γ ⊨ σ) (hA : ⟦ A ⟧ᵛ ↘ P) (h : Γ ∷ A ⊨ m ∶ B) : SNCom (m⦃⇑ σ⦄) := by
   let ⟨Q, hB, qm⟩ := h (var 0 +: σ) (semCtxtCons hA (hA.sneVal .var) hσ)
-  rw [substComVar] at qm
+  rw [substVar] at qm
   exact (hB.snCom qm).antirenaming
 
 theorem soundness {Γ} :
@@ -43,15 +43,15 @@ theorem soundness {Γ} :
   case var A mem =>
     let ⟨P, hA⟩ := A.interp
     exact ⟨P, hA, hσ mem hA⟩
-  case unit => exact ⟨_, .Unit, .inr .refl⟩
+  case unit => exact ⟨_, .Unit, .inr rfl⟩
   case inl A₂ _ ih =>
     let ⟨_, hA₂⟩ := A₂.interp
     let ⟨_, hA₁, pv⟩ := ih σ hσ
-    refine ⟨_, .Sum hA₁ hA₂, .inr (.inl ⟨_, .refl, pv⟩)⟩
+    refine ⟨_, .Sum hA₁ hA₂, .inr (.inl ⟨_, rfl, pv⟩)⟩
   case inr A₁ _ _ ih =>
     let ⟨_, hA₁⟩ := A₁.interp
     let ⟨_, hA₂, pv⟩ := ih σ hσ
-    refine ⟨_, .Sum hA₁ hA₂, .inr (.inr ⟨_, .refl, pv⟩)⟩
+    refine ⟨_, .Sum hA₁ hA₂, .inr (.inr ⟨_, rfl, pv⟩)⟩
   case thunk ih =>
     let ⟨_, hB, pm⟩ := ih σ hσ
     exact ⟨_, .U hB, hB.closure (.once .thunk) pm⟩
@@ -83,50 +83,52 @@ theorem soundness {Γ} :
   case letin m n _ B _ _ ihm ihn =>
     let ⟨_, hFA, pm⟩ := ihm σ hσ
     cases hFA with | F hA =>
+    let snn := SNup hσ hA ihn
     match pm with
     | .inl ⟨_, r, sne⟩ =>
       let ⟨P, hB⟩ := B.interp
-      let plet := hB.sneCom (.letin sne (SNup hσ hA ihn))
-      exact ⟨P, hB, hB.closure (.letin r) plet⟩
+      let plet := hB.sneCom (.letin sne snn)
+      exact ⟨P, hB, hB.closure (.letin r snn) plet⟩
     | .inr ⟨v, r, pv⟩ =>
       let ⟨_, hB, pn⟩ := ihn (v +: σ) (semCtxtCons hA pv hσ)
       let r' : (letin m n)⦃σ⦄ ⤳⋆ n⦃v +: σ⦄ := by
         calc
           (letin m n)⦃σ⦄
           _ ⤳⋆ letin (m⦃σ⦄) (n⦃⇑ σ⦄)   := .refl
-          _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r
+          _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r snn
           _ ⤳⋆ n⦃⇑ σ⦄⦃v⦄               := .once (.ret (hA.snVal pv))
           _ ⤳⋆ n⦃v +: σ⦄               := by rw [← substUnion]
       exact ⟨_, hB, hB.closure r' pn⟩
   case case v m n _ _ B _ _ _ ihv ihm ihn =>
     let ⟨_, hSum, pv⟩ := ihv σ hσ
     cases hSum with | Sum hA₁ hA₂ =>
-      let snm := SNup hσ hA₁ ihm
-      let snn := SNup hσ hA₂ ihn
-      match pv with
-      | .inl sne =>
-        let ⟨P, hB⟩ := B.interp
-        exact ⟨P, hB, hB.sneCom (.case sne snm snn)⟩
-      | .inr (.inl ⟨w, r, pv⟩) =>
-        let ⟨R, hB, rm⟩ := ihm (w +: σ) (semCtxtCons hA₁ pv hσ)
-        let r' : (case v m n)⦃σ⦄ ⤳⋆ m⦃w +: σ⦄ := by
-          calc
-            (case v m n)⦃σ⦄
-            _ ⤳⋆ case (v⦃σ⦄) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := .refl
-            _ ⤳⋆ case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := .case r
-            _ ⤳⋆ m⦃⇑ σ⦄⦃w⦄                      := .once (.inl snn)
-            _ ⤳⋆ m⦃w +: σ⦄                      := by rw [← substUnion]
-        exact ⟨R, hB, hB.closure r' rm⟩
-      | .inr (.inr ⟨w, r, qv⟩) =>
-        let ⟨R, hB, rm⟩ := ihn (w +: σ) (semCtxtCons hA₂ qv hσ)
-        let r' : (case v m n)⦃σ⦄ ⤳⋆ n⦃w +: σ⦄ := by
-          calc
-            (case v m n)⦃σ⦄
-            _ ⤳⋆ case (v⦃σ⦄) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := .refl
-            _ ⤳⋆ case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := .case r
-            _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snm)
-            _ ⤳⋆ n⦃w +: σ⦄                      := by rw [← substUnion]
-        exact ⟨R, hB, hB.closure r' rm⟩
+    let snm := SNup hσ hA₁ ihm
+    let snn := SNup hσ hA₂ ihn
+    match pv with
+    | .inl sne =>
+      let ⟨P, hB⟩ := B.interp
+      exact ⟨P, hB, hB.sneCom (.case sne snm snn)⟩
+    | .inr (.inl ⟨w, e, pv⟩) =>
+      let snv := hA₁.snVal pv
+      let ⟨R, hB, rm⟩ := ihm (w +: σ) (semCtxtCons hA₁ pv hσ)
+      simp only [substCom]
+      let r : (case v m n)⦃σ⦄ ⤳⋆ m⦃w +: σ⦄ := by
+        calc
+          (case v m n)⦃σ⦄
+          _ ⤳⋆ (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
+          _ ⤳⋆ m⦃⇑ σ⦄⦃w⦄                        := .once (.inl snv snm snn)
+          _ ⤳⋆ m⦃w +: σ⦄                        := by rw [← substUnion]
+      exact ⟨R, hB, hB.closure r rm⟩
+    | .inr (.inr ⟨w, e, qv⟩) =>
+      let snv := hA₂.snVal qv
+      let ⟨R, hB, rm⟩ := ihn (w +: σ) (semCtxtCons hA₂ qv hσ)
+      let r' : (case v m n)⦃σ⦄ ⤳⋆ n⦃w +: σ⦄ := by
+        calc
+          (case v m n)⦃σ⦄
+          _ ⤳⋆ case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
+          _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snv snm snn)
+          _ ⤳⋆ n⦃w +: σ⦄                      := by rw [← substUnion]
+      exact ⟨R, hB, hB.closure r' rm⟩
 
 theorem normalization {Γ} :
   (∀ {v : Val} {A}, Γ ⊢ v ∶ A → SNVal v) ∧
