@@ -60,6 +60,34 @@ end
 infix:40 "⤳ᵛ" => StepVal
 infix:40 "⤳ᶜ" => StepCom
 
+/-*---------------------------------
+  Renaming and substitution lemmas
+---------------------------------*-/
+
+theorem stepRenaming ξ :
+  (∀ {v w}, v ⤳ᵛ w → renameVal ξ v ⤳ᵛ renameVal ξ w) ∧
+  (∀ {m n}, m ⤳ᶜ n → renameCom ξ m ⤳ᶜ renameCom ξ n) := by
+  refine ⟨λ r ↦ ?val, λ r ↦ ?com⟩
+  mutual_induction r, r generalizing ξ
+  all_goals try rw [← renameDist]
+  all_goals constructor
+  all_goals apply_assumption
+
+def StepVal.rename {v w} ξ := @(stepRenaming ξ).left v w
+def StepCom.rename {m n} ξ := @(stepRenaming ξ).right m n
+
+theorem stepSubstitution σ :
+  (∀ {v w}, v ⤳ᵛ w → v⦃σ⦄ ⤳ᵛ w⦃σ⦄) ∧
+  (∀ {m n}, m ⤳ᶜ n → m⦃σ⦄ ⤳ᶜ n⦃σ⦄) := by
+  refine ⟨λ r ↦ ?val, λ r ↦ ?com⟩
+  mutual_induction r, r generalizing σ
+  all_goals try rw [← substDist]
+  all_goals constructor
+  all_goals apply_assumption
+
+def StepVal.subst {v w} σ := @(stepSubstitution σ).left v w
+def StepCom.subst {m n} σ := @(stepSubstitution σ).right m n
+
 /-*---------------------
   Multi-step reduction
 ---------------------*-/
@@ -221,7 +249,7 @@ theorem StepCom.SN.app_lam {m v} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v�
   case a.β h _ => exact .sn h
   case a.app₁ ih _ r =>
     cases r with | lam r =>
-    refine ih ?_ snv rfl; sorry -- substitution
+    exact ih (.subst _ r) snv rfl
   case a.app₂ ih _ r =>
     cases snv with | sn h =>
     refine ih ?_ (h r) rfl; sorry -- substitution
@@ -236,7 +264,7 @@ theorem StepCom.SN.letin_ret {m v} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v
     cases snv with | sn h =>
     refine ih ?_ (h r) rfl; sorry -- substitution
   case a.letin₂ ih _ r =>
-    refine ih ?_ snv rfl; sorry -- substitution
+    exact ih (.subst _ r) snv rfl
 
 theorem StepCom.SN.case_inl {v m n} (snv : StepVal.SN v) (snm : StepCom.SN (m⦃v⦄)) (snn : StepCom.SN n) : StepCom.SN (.case (.inl v) m n) := by
   generalize e : (m⦃v⦄) = m' at snm
@@ -298,7 +326,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
   case lam.β => exact .inr rfl
   case lam.app₁ snv _ r =>
     cases r with | lam r =>
-    refine .inl ⟨_, .lam snv, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .lam snv, .subst _ r⟩
   case lam.app₂ snv _ r =>
     cases snv with | sn h =>
     refine .inl ⟨_, .lam (h r), ?_⟩; sorry -- substitution
@@ -308,7 +336,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     cases snv with | sn h =>
     refine .inl ⟨_, .ret (h r), ?_⟩; sorry -- substitution
   case ret.letin₂ snv _ r =>
-    refine .inl ⟨_, .ret snv, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .ret snv, .subst _ r⟩
   case inl.ιl => exact .inr rfl
   case inl.case snv snm snn _ r =>
     cases r with | inl r =>
@@ -316,7 +344,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     refine .inl ⟨_, .inl (h r) snm snn, ?_⟩; sorry -- substitution
   case inl.case₁ snv snm snn _ r =>
     cases snm with | sn h =>
-    refine .inl ⟨_, .inl snv (h r) snn, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inl snv (h r) snn, .subst _ r⟩
   case inl.case₂ snv snm snn _ r =>
     cases snn with | sn h =>
     refine .inl ⟨_, .inl snv snm (h r), ?_⟩; sorry -- substitution
@@ -330,7 +358,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     refine .inl ⟨_, .inr snv (h r) snn, ?_⟩; sorry -- substitution
   case inr.case₂ snv snm snn _ r =>
     cases snn with | sn h =>
-    refine .inl ⟨_, .inr snv snm (h r), ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inr snv snm (h r), .subst _ r⟩
   case app.β r ih => cases r
   case app.app₁ snv _ ih _ r =>
     cases ih r
