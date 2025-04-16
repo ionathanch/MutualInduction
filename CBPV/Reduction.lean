@@ -123,23 +123,39 @@ theorem StepComs.trans' {a b c} (r₁ : a ⤳⋆ᶜ b) (r₂ : b ⤳⋆ᶜ c) : 
   case refl => exact r₂
   case trans r₁ _ ih => exact .trans r₁ (ih r₂)
 
-/-*--------------------------------------------
-  Substitution lemmas on multi-step reduction
---------------------------------------------*-/
-
-theorem StepVals.subst {v w} (σ : Nat → Val) (r : v ⤳⋆ᵛ w) : v⦃σ⦄ ⤳⋆ᵛ w⦃σ⦄ := by
-  induction r
-  case refl => exact .refl
-  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
-
-theorem StepComs.subst {m n} (σ : Nat → Val) (r : m ⤳⋆ᶜ n) : m⦃σ⦄ ⤳⋆ᶜ n⦃σ⦄ := by
-  induction r
-  case refl => exact .refl
-  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
-
 /-*-----------------------------------------
   Congruence rules on multi-step reduction
 -----------------------------------------*-/
+
+theorem StepVals.inl {v w} (r : v ⤳⋆ᵛ w) : inl v ⤳⋆ᵛ inl w := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.inl r₁) r₂
+
+theorem StepVals.inr {v w} (r : v ⤳⋆ᵛ w) : inr v ⤳⋆ᵛ inr w := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.inr r₁) r₂
+
+theorem StepVals.thunk {m n} (r : m ⤳⋆ᶜ n) : thunk m ⤳⋆ᵛ thunk n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.thunk r₁) r₂
+
+theorem StepComs.force {v w} (r : v ⤳⋆ᵛ w) : force v ⤳⋆ᶜ force w := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.force r₁) r₂
+
+theorem StepComs.ret {v w} (r : v ⤳⋆ᵛ w) : ret v ⤳⋆ᶜ ret w := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.ret r₁) r₂
+
+theorem StepComs.lam {m n} (r : m ⤳⋆ᶜ n) : lam m ⤳⋆ᶜ lam n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.lam r₁) r₂
 
 theorem StepComs.app₁ {m n v} (r : m ⤳⋆ᶜ n) : app m v ⤳⋆ᶜ app n v := by
   induction r
@@ -151,6 +167,9 @@ theorem StepComs.app₂ {m v w} (r : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app m w 
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.app₂ r₁) r₂
 
+theorem StepComs.app {m n v w} (rm : m ⤳⋆ᶜ n) (rv : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app n w :=
+  .trans' (.app₁ rm) (.app₂ rv)
+
 theorem StepComs.letin₁ {m m' n} (r : m ⤳⋆ᶜ m') : letin m n ⤳⋆ᶜ letin m' n := by
   induction r
   case refl => exact .refl
@@ -160,6 +179,79 @@ theorem StepComs.letin₂ {m n n'} (r : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ le
   induction r
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.letin₂ r₁) r₂
+
+theorem StepComs.letin {m m' n n'} (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ letin m' n' :=
+  .trans' (.letin₁ rm) (.letin₂ rn)
+
+theorem StepComs.case₀ {v w m n} (r : v ⤳⋆ᵛ w) : case v m n ⤳⋆ᶜ case w m n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.case r₁) r₂
+
+theorem StepComs.case₁ {v m m' n} (r : m ⤳⋆ᶜ m') : case v m n ⤳⋆ᶜ case v m' n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.case₁ r₁) r₂
+
+theorem StepComs.case₂ {v m n n'} (r : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ case v m n' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.case₂ r₁) r₂
+
+theorem StepComs.case {v w m m' n n'} (rv : v ⤳⋆ᵛ w) (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ case w m' n' :=
+  .trans' (.case₀ rv) (.trans' (.case₁ rm) (.case₂ rn))
+
+/-*--------------------------------------------
+  Substitution lemmas on multi-step reduction
+--------------------------------------------*-/
+
+theorem StepVals.rename {v w} ξ (r : v ⤳⋆ᵛ w) : renameVal ξ v ⤳⋆ᵛ renameVal ξ w := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.rename ξ r₁) r₂
+
+theorem StepComs.rename {m n} ξ (r : m ⤳⋆ᶜ n) : renameCom ξ m ⤳⋆ᶜ renameCom ξ n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.rename ξ r₁) r₂
+
+theorem StepVals.subst {v w} (σ : Nat → Val) (r : v ⤳⋆ᵛ w) : v⦃σ⦄ ⤳⋆ᵛ w⦃σ⦄ := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
+
+theorem StepComs.subst {m n} (σ : Nat → Val) (r : m ⤳⋆ᶜ n) : m⦃σ⦄ ⤳⋆ᶜ n⦃σ⦄ := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.subst σ r₁) r₂
+
+theorem StepVals.lift {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x) : ∀ x, (⇑ σ) x ⤳⋆ᵛ (⇑ τ) x := by
+  intro n; cases n
+  case zero => exact .refl
+  case succ n => exact StepVals.rename Nat.succ (h n)
+
+theorem stepReplace {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x):
+  (∀ {v}, v⦃σ⦄ ⤳⋆ᵛ v⦃τ⦄) ∧
+  (∀ {m}, m⦃σ⦄ ⤳⋆ᶜ m⦃τ⦄) := by
+  refine ⟨λ {v} ↦ ?val, λ {m} ↦ ?com⟩
+  mutual_induction v, m generalizing σ τ
+  case var => apply h
+  case unit => exact .refl
+  case inl ih => exact .inl (ih h)
+  case inr ih => exact .inr (ih h)
+  case thunk ih => exact .thunk (ih h)
+  case force ih => exact .force (ih h)
+  case lam ih => exact .lam (ih (.lift h))
+  case app ihm ihv => exact .app (ihm h) (ihv h)
+  case ret ih => exact .ret (ih h)
+  case letin ihm ihn => exact .letin (ihm h) (ihn (.lift h))
+  case case ihv ihm ihn => exact .case (ihv h) (ihm (.lift h)) (ihn (.lift h))
+
+theorem StepComs.replace {m : Com} {v w : Val} (r : v ⤳ᵛ w) : m⦃v⦄ ⤳⋆ᶜ m⦃w⦄ := by
+  refine @(stepReplace ?ext).right m
+  intro n; cases n
+  case zero => exact .once r
+  case succ => simp; exact .refl
 
 /-*---------------------------------
   Traditional strong normalization
@@ -354,19 +446,19 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     exact .inl ⟨_, .lam snv, .subst _ (.once r)⟩
   case lam.app₂ snv _ r =>
     cases snv with | sn h =>
-    refine .inl ⟨_, .lam (h r), ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .lam (h r), .replace r⟩
   case ret.ζ => exact .inr rfl
   case ret.letin₁ snv _ r =>
     cases r with | ret r =>
     cases snv with | sn h =>
-    refine .inl ⟨_, .ret (h r), ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .ret (h r), .replace r⟩
   case ret.letin₂ snv _ r =>
     exact .inl ⟨_, .ret snv, .subst _ (.once r)⟩
   case inl.ιl => exact .inr rfl
   case inl.case snv snm snn _ r =>
     cases r with | inl r =>
     cases snv with | sn h =>
-    refine .inl ⟨_, .inl (h r) snm snn, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inl (h r) snm snn, .replace r⟩
   case inl.case₁ snv snm snn _ r =>
     cases snm with | sn h =>
     exact .inl ⟨_, .inl snv (h r) snn, .subst _ (.once r)⟩
@@ -377,7 +469,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
   case inr.case snv snm snn _ r =>
     cases r with | inr r =>
     cases snv with | sn h =>
-    refine .inl ⟨_, .inr (h r) snm snn, ?_⟩; sorry -- substitution
+    exact .inl ⟨_, .inr (h r) snm snn, .replace r⟩
   case inr.case₁ snv snm snn _ r =>
     cases snm with | sn h =>
     exact .inl ⟨_, .inr snv (h r) snn, .refl⟩
