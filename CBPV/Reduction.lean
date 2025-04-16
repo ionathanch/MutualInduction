@@ -292,13 +292,45 @@ infix:40 "⤳ⁿ" => StepSN
 
 theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) : (∃ m', n₁ ⤳ⁿ m' ∧ n₂ ⤳ᶜ m') ∨ n₁ = n₂ := by
   induction r₂ generalizing n₁ <;> cases r₁
+  case thunk.π => exact .inr rfl
+  case thunk.force r =>
+    cases r with | thunk r => exact .inl ⟨_, .thunk, r⟩
   case lam.β => exact .inr rfl
   case lam.app₁ snv _ r =>
-    cases r; case lam r =>
+    cases r with | lam r =>
     refine .inl ⟨_, .lam snv, ?_⟩; sorry -- substitution
   case lam.app₂ snv _ r =>
-    cases snv; case sn h =>
+    cases snv with | sn h =>
     refine .inl ⟨_, .lam (h r), ?_⟩; sorry -- substitution
+  case ret.ζ => exact .inr rfl
+  case ret.letin₁ snv _ r =>
+    cases r with | ret r =>
+    cases snv with | sn h =>
+    refine .inl ⟨_, .ret (h r), ?_⟩; sorry -- substitution
+  case ret.letin₂ snv _ r =>
+    refine .inl ⟨_, .ret snv, ?_⟩; sorry -- substitution
+  case inl.ιl => exact .inr rfl
+  case inl.case snv snm snn _ r =>
+    cases r with | inl r =>
+    cases snv with | sn h =>
+    refine .inl ⟨_, .inl (h r) snm snn, ?_⟩; sorry -- substitution
+  case inl.case₁ snv snm snn _ r =>
+    cases snm with | sn h =>
+    refine .inl ⟨_, .inl snv (h r) snn, ?_⟩; sorry -- substitution
+  case inl.case₂ snv snm snn _ r =>
+    cases snn with | sn h =>
+    refine .inl ⟨_, .inl snv snm (h r), ?_⟩; sorry -- substitution
+  case inr.ιr => exact .inr rfl
+  case inr.case snv snm snn _ r =>
+    cases r with | inr r =>
+    cases snv with | sn h =>
+    refine .inl ⟨_, .inr (h r) snm snn, ?_⟩; sorry -- substitution
+  case inr.case₁ snv snm snn _ r =>
+    cases snm with | sn h =>
+    refine .inl ⟨_, .inr snv (h r) snn, ?_⟩; sorry -- substitution
+  case inr.case₂ snv snm snn _ r =>
+    cases snn with | sn h =>
+    refine .inl ⟨_, .inr snv snm (h r), ?_⟩; sorry -- substitution
   case app.β r ih => cases r
   case app.app₁ snv _ ih _ r =>
     cases ih r
@@ -307,9 +339,18 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
       exact .inl ⟨_, .app snv r₁', .app₁ r₂'⟩
     case inr e => subst e; exact .inr rfl
   case app.app₂ snv r₁' _ _ r₂' =>
-    cases snv; case sn h =>
+    cases snv with | sn h =>
     exact .inl ⟨_, .app (h r₂') r₁', .app₂ r₂'⟩
-  all_goals sorry
+  case letin.ζ r _ => cases r
+  case letin.letin₁ snn _ ih _ r =>
+    cases ih r
+    case inl h =>
+      let ⟨_, r₁', r₂'⟩ := h
+      exact .inl ⟨_, .letin snn r₁', .letin₁ r₂'⟩
+    case inr e => subst e; exact .inr rfl
+  case letin.letin₂ snn r₁ ih _ r₂ =>
+    cases snn with | sn h =>
+    refine .inl ⟨_, .letin (h r₂) r₁, .letin₂ r₂⟩
 
 /-*-------------------------------------
   Backward closure of strong reduction
