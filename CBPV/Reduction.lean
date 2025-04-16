@@ -315,6 +315,42 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
   Backward closure of strong reduction
 -------------------------------------*-/
 
+theorem closure_app {v m n} (r₁ : m ⤳ⁿ n) (snm : StepCom.SN m) (snv : StepVal.SN v) (snapp : StepCom.SN (.app n v)) : StepCom.SN (.app m v) := by
+  constructor; intro _ r; cases r
+  case a.β => cases r₁
+  case a.app₁ r₂ =>
+    cases confluence r₂ r₁
+    case inl h =>
+      let ⟨_, r₂', r₁'⟩ := h
+      cases snm with | sn hm =>
+      cases snapp with | sn happ =>
+      exact closure_app r₂' (hm r₂) snv (happ (.app₁ r₁'))
+    case inr e => subst e; exact snapp
+  case a.app₂ r =>
+    cases snv with | sn hv =>
+    cases snapp with | sn happ =>
+    exact closure_app r₁ snm (hv r) (happ (.app₂ r))
+termination_by sizeOf snm + sizeOf snv
+decreasing_by all_goals sorry
+
+theorem closure_letin {m m' n} (r₁ : m ⤳ⁿ m') (snm : StepCom.SN m) (snn : StepCom.SN n) (snlet : StepCom.SN (.letin m' n)) : StepCom.SN (.letin m n) := by
+  constructor; intro _ r; cases r
+  case a.ζ => cases r₁
+  case a.letin₁ r₂ =>
+    cases confluence r₂ r₁
+    case inl h =>
+      let ⟨_, r₂', r₁'⟩ := h
+      cases snm with | sn hm =>
+      cases snlet with | sn hlet =>
+      exact closure_letin r₂' (hm r₂) snn (hlet (.letin₁ r₁'))
+    case inr e => subst e; exact snlet
+  case a.letin₂ r =>
+    cases snn with | sn hn =>
+    cases snlet with | sn hlet =>
+    exact closure_letin r₁ snm (hn r) (hlet (.letin₂ r))
+termination_by sizeOf snm + sizeOf snn
+decreasing_by all_goals sorry
+
 theorem StepSN.closure {m n} (r : m ⤳ⁿ n) (snn : StepCom.SN n) : StepCom.SN m := by
   induction r
   case thunk => exact .force_thunk snn
@@ -322,12 +358,8 @@ theorem StepSN.closure {m n} (r : m ⤳ⁿ n) (snn : StepCom.SN n) : StepCom.SN 
   case ret snv => exact .letin_ret snv snn
   case inl snv _ snm => exact .case_inl snv snn snm
   case inr snv snm _ => exact .case_inr snv snm snn
-  case app rn ih =>
-    let snm := ih snn.app_inv
-    sorry -- property 3.13 (1)
-  case letin rn ih =>
-    let snm := ih snn.letin_inv
-    sorry -- another property
+  case app snv rn ih => exact closure_app rn (ih snn.app_inv) snv snn
+  case letin snm rn ih => exact closure_letin rn (ih snn.letin_inv) snm snn
 
 /-*--------------
   Neutral terms
