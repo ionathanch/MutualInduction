@@ -28,8 +28,9 @@ notation:40 Γ:41 "⊨" m:41 "∶" B:41 => semCom Γ m B
   Fundamental soundness theorem
 ------------------------------*-/
 
-theorem SNup {Γ σ A B P} {m : Com}
-  (hσ : Γ ⊨ σ) (hA : ⟦ A ⟧ᵛ ↘ P) (h : Γ ∷ A ⊨ m ∶ B) : SNCom (m⦃⇑ σ⦄) := by
+theorem SNup {Γ σ A B} {m : Com}
+  (hσ : Γ ⊨ σ) (h : Γ ∷ A ⊨ m ∶ B) : SNCom (m⦃⇑ σ⦄) := by
+  let ⟨P, hA⟩ := A.interp
   let ⟨Q, hB, qm⟩ := h (var 0 +: σ) (semCtxtCons hA (hA.sneVal .var) hσ)
   rw [substVar] at qm
   exact (hB.snCom qm).antirenaming
@@ -83,7 +84,7 @@ theorem soundness {Γ} :
   case letin m n _ B _ _ ihm ihn =>
     let ⟨_, hFA, pm⟩ := ihm σ hσ
     cases hFA with | F hA =>
-    let snn := SNup hσ hA ihn
+    let snn := SNup hσ ihn
     match pm with
     | .inl ⟨_, r, sne⟩ =>
       let ⟨P, hB⟩ := B.interp
@@ -102,8 +103,8 @@ theorem soundness {Γ} :
   case case v m n _ _ B _ _ _ ihv ihm ihn =>
     let ⟨_, hSum, pv⟩ := ihv σ hσ
     cases hSum with | Sum hA₁ hA₂ =>
-    let snm := SNup hσ hA₁ ihm
-    let snn := SNup hσ hA₂ ihn
+    let snm := SNup hσ ihm
+    let snn := SNup hσ ihn
     match pv with
     | .inl sne =>
       let ⟨P, hB⟩ := B.interp
