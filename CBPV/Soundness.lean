@@ -47,11 +47,11 @@ theorem soundness {Γ} :
   case inl A₂ _ ih =>
     let ⟨_, hA₂⟩ := A₂.interp
     let ⟨_, hA₁, pv⟩ := ih σ hσ
-    refine ⟨_, .Sum hA₁ hA₂, .inr (.inl ⟨_, rfl, pv⟩)⟩
+    exact ⟨_, .Sum hA₁ hA₂, .inr (.inl ⟨_, rfl, pv⟩)⟩
   case inr A₁ _ _ ih =>
     let ⟨_, hA₁⟩ := A₁.interp
     let ⟨_, hA₂, pv⟩ := ih σ hσ
-    refine ⟨_, .Sum hA₁ hA₂, .inr (.inr ⟨_, rfl, pv⟩)⟩
+    exact ⟨_, .Sum hA₁ hA₂, .inr (.inr ⟨_, rfl, pv⟩)⟩
   case thunk ih =>
     let ⟨_, hB, pm⟩ := ih σ hσ
     exact ⟨_, .U hB, hB.closure (.once .thunk) pm⟩
@@ -116,7 +116,7 @@ theorem soundness {Γ} :
         calc
           (case v m n)⦃σ⦄
           _ ⤳⋆ (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
-          _ ⤳⋆ m⦃⇑ σ⦄⦃w⦄                        := .once (.inl snv snm snn)
+          _ ⤳⋆ m⦃⇑ σ⦄⦃w⦄                        := .once (.inl snv snn)
           _ ⤳⋆ m⦃w +: σ⦄                        := by rw [← substUnion]
       exact ⟨R, hB, hB.closure r rm⟩
     | .inr (.inr ⟨w, e, qv⟩) =>
@@ -126,6 +126,6 @@ theorem soundness {Γ} :
         calc
           (case v m n)⦃σ⦄
           _ ⤳⋆ case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
-          _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snv snm snn)
+          _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snv snm)
           _ ⤳⋆ n⦃w +: σ⦄                      := by rw [← substUnion]
       exact ⟨R, hB, hB.closure r' rm⟩

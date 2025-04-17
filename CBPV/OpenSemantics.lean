@@ -111,8 +111,8 @@ theorem adequacy :
   case F ih m =>
     refine ⟨λ sne ↦ Or.inl ⟨_, .refl, sne⟩, λ sn ↦ ?_⟩
     match sn with
-    | .inl ⟨_, r, sne⟩ => exact r.closure (.ne sne)
-    | .inr ⟨_, r, pv⟩  => exact r.closure (.ret (ih.right pv))
+    | .inl ⟨_, r, sne⟩ => exact r.red (.ne sne)
+    | .inr ⟨_, r, pv⟩  => exact r.red (.ret (ih.right pv))
   case Arr ihv ihm _ =>
     refine ⟨λ sne ↦ ?sne, λ sn ↦ ?sn⟩
     case sne m =>

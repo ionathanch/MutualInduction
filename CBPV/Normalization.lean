@@ -39,7 +39,7 @@ theorem SN_soundness :
   (∀ {m n : Com}, m ⤳ n → m ⤳ⁿ n) := by
   refine ⟨λ sne ↦ ?snecom, λ sn ↦ ?snval, λ sn ↦ ?sncom, λ r ↦ ?srcom⟩
   mutual_induction sne, sn, sn, r
-  case snecom.force ih => exact .force (.ne ih)
+  case snecom.force snv => exact .force snv
   case snecom.app snem _ snm snv => exact .app (.ne snem) snm snv
   case snecom.letin snem _ snm snn => exact .letin (.ne snem) snm snn
   case snecom.case snv _ _ snm snn => exact .case snv snm snn

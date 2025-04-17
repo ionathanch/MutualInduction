@@ -102,26 +102,26 @@ theorem antisubstitution {σ} :
     injection ev with ev
     subst ev em; rw [substDist]
     exact .inl ⟨_, rfl, .ret (ih rfl)⟩
-  case srcom.inl ihv ihm ihn m =>
+  case srcom.inl ihv ihn m =>
     cases m <;> try contradiction
     injection e with ev em en
     case case v _ _ =>
     cases v <;> try contradiction
-    case var m n _ => exact .inr (.case .var (ihm em) (ihn en))
+    case var m n _ => exact .inr (.case .var sorry (ihn en))
     case inl =>
     injection ev with ev
     subst ev em en; rw [substDist]
-    exact .inl ⟨_, rfl, .inl (ihv rfl) (ihm rfl) (ihn rfl)⟩
-  case srcom.inr ihv ihm ihn m =>
+    exact .inl ⟨_, rfl, .inl (ihv rfl) (ihn rfl)⟩
+  case srcom.inr ihv ihm m =>
     cases m <;> try contradiction
     injection e with ev em en
     case case v _ _ =>
     cases v <;> try contradiction
-    case var m n _ => exact .inr (.case .var (ihm em) (ihn en))
+    case var m n _ => exact .inr (.case .var (ihm em) sorry)
     case inr =>
     injection ev with ev
     subst ev em en; rw [substDist]
-    exact .inl ⟨_, rfl, .inr (ihv rfl) (ihm rfl) (ihn rfl)⟩
+    exact .inl ⟨_, rfl, .inr (ihv rfl) (ihm rfl)⟩
   case srcom.app ihv ihm m =>
     cases m <;> try contradiction
     injection e with em ev
@@ -167,13 +167,3 @@ theorem SNCom.letin_inv {m n} (h : SNCom (letin m n)) : SNCom m ∧ SNCom n := b
     cases r
     case ret snv => exact ⟨.ret snv, sn.antisubstitution⟩
     case letin r _ => let ⟨snm, snn⟩ := ih rfl; exact ⟨.red r snm, snn⟩
-
-/-*---------------------
-  Admissibility lemmas
----------------------*-/
-
-theorem SNCom.caseₗ {v m n} (snv : SNVal v) (snn : SNCom n) (snm : SNCom (m⦃v⦄)) : SNCom (case (.inl v) m n) :=
-  .red (.inl snv snm.antisubstitution snn) snm
-
-theorem SNCom.caseᵣ {v m n} (snv : SNVal v) (snm : SNCom m) (snn : SNCom (n⦃v⦄)) : SNCom (case (.inr v) m n) :=
-  .red (.inr snv snm snn.antisubstitution) snn

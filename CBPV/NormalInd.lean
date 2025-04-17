@@ -32,8 +32,8 @@ inductive SR : Com → Com → Prop where
   | thunk {m} : force (thunk m) ⤳ m
   | lam {m : Com} {v} : SNVal v → app (lam m) v ⤳ m⦃v⦄
   | ret {v m} : SNVal v → letin (ret v) m ⤳ m⦃v⦄
-  | inl {v m n} : SNVal v → SNCom m → SNCom n → case (inl v) m n ⤳ m⦃v⦄
-  | inr {v m n} : SNVal v → SNCom m → SNCom n → case (inr v) m n ⤳ n⦃v⦄
+  | inl {v m n} : SNVal v → SNCom n → case (inl v) m n ⤳ m⦃v⦄
+  | inr {v m n} : SNVal v → SNCom m → case (inr v) m n ⤳ n⦃v⦄
   | app {m n : Com} {v} : SNVal v → m ⤳ n → app m v ⤳ app n v
   | letin {m m' n : Com} : SNCom n → m ⤳ m' → letin m n ⤳ letin m' n
 end
@@ -51,34 +51,6 @@ theorem SNCom.force_inv {v} (h : SNCom (force v)) : SNVal v := by
   case ne sne => match sne with
   | .force ⟨_, e⟩ => subst e; exact .var
   case red sn ih r => cases r; exact .thunk sn
-
-theorem SNCom.case_inv {v m₁ m₂} (h : SNCom (case v m₁ m₂)) : SNVal v ∧ SNCom m₁ ∧ SNCom m₂ := by
-  generalize e : case v m₁ m₂ = n at h
-  mutual_induction h generalizing v m₁ m₂
-  all_goals first | contradiction | subst e
-  case ne sne =>
-    match sne with
-    | .case ⟨_, e⟩ snm₁ snm₂ => subst e; exact ⟨.var, snm₁, snm₂⟩
-  case red sn ih r =>
-    cases r
-    case inl snv snm₁ snm₂ => exact ⟨.inl snv, snm₁, snm₂⟩
-    case inr snv snm₁ snm₂ => exact ⟨.inr snv, snm₁, snm₂⟩
-
-theorem SNCom.lam_inv {m} (h : SNCom (.lam m)) : SNCom m := by
-  generalize e : Com.lam m = n at h
-  mutual_induction h generalizing m
-  all_goals first | contradiction | injection e | subst e
-  case lam e => subst e; assumption
-  case ne sne => cases sne
-  case red r => cases r
-
-theorem SNCom.ret_inv {v} (h : SNCom (.ret v)) : SNVal v := by
-  generalize e : Com.ret v = m at h
-  mutual_induction h generalizing v
-  all_goals first | contradiction | injection e | subst e
-  case ret e => subst e; assumption
-  case ne sne => cases sne
-  case red r => cases r
 
 /-*---------------------------------------
   Transitive closure of strong reduction
@@ -119,13 +91,7 @@ theorem SRs.letin {m m' n : Com} (r : m ⤳⋆ m') (snn : SNCom n) : letin m n �
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.letin snn r₁) r₂
 
-/-*----------------------------------------
-  Backward closure wrt strong reduction
-  N.B. SNeComs are *not* backward closed,
-  e.g. force (thunk (force x)) ⤳ force x
-----------------------------------------*-/
-
-theorem SRs.closure {m n : Com} (r : m ⤳⋆ n) (h : SNCom n) : SNCom m := by
+theorem SRs.red {m n : Com} (r : m ⤳⋆ n) (h : SNCom n) : SNCom m := by
   induction r
   case refl => assumption
   case trans r _ ih => exact .red r (ih h)
@@ -218,22 +184,22 @@ theorem antirenaming {ξ} :
     injection ev with ev
     subst ev em; rw [renameDist]
     exact ⟨_, rfl, .ret (ih rfl)⟩
-  case srcom.inl ihv ihm ihn m =>
+  case srcom.inl ihv ihn m =>
     cases m <;> try contradiction
     injection e with ev em en
     rename Val => v
     cases v <;> try contradiction
     injection ev with ev
     subst ev em en; rw [renameDist]
-    exact ⟨_, rfl, .inl (ihv rfl) (ihm rfl) (ihn rfl)⟩
-  case srcom.inr ihv ihm ihn m =>
+    exact ⟨_, rfl, .inl (ihv rfl) (ihn rfl)⟩
+  case srcom.inr ihv ihm m =>
     cases m <;> try contradiction
     injection e with ev em en
     rename Val => v
     cases v <;> try contradiction
     injection ev with ev
     subst ev em en; rw [renameDist]
-    exact ⟨_, rfl, .inr (ihv rfl) (ihm rfl) (ihn rfl)⟩
+    exact ⟨_, rfl, .inr (ihv rfl) (ihm rfl)⟩
   case srcom.app ihv ihm m =>
     cases m <;> try contradiction
     injection e with em ev
