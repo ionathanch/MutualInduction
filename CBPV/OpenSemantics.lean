@@ -65,9 +65,9 @@ def ComType.interp : ∀ B, ∃ P, ⟦ B ⟧ᶜ ↘ P := _root_.interp.right
 /-*-----------------------------------------------------
   Properties of the logical relation:
   * Interpretation of a type is deterministic
+  * Backward closure wrt strong reduction
   * Interpretations contain all strongly neutral terms
   * Terms in interpretations are strongly normalizing
-  * Backward closure wrt strong reduction
 -----------------------------------------------------*-/
 
 theorem determinism :
@@ -87,6 +87,15 @@ theorem determinism :
 
 def 𝒱.det : ∀ {A P Q}, ⟦ A ⟧ᵛ ↘ P → ⟦ A ⟧ᵛ ↘ Q → P = Q := determinism.left
 def 𝒞.det : ∀ {B P Q}, ⟦ B ⟧ᶜ ↘ P → ⟦ B ⟧ᶜ ↘ Q → P = Q := determinism.right
+
+theorem 𝒞.closure {B P} {m n : Com} (h : ⟦ B ⟧ᶜ ↘ P) (r : m ⤳⋆ n) : P n → P m := by
+  mutual_induction h generalizing m n
+  all_goals intro p
+  case F =>
+    match p with
+    | .inl ⟨_, r', sne⟩ => exact Or.inl ⟨_, .trans' r r', sne⟩
+    | .inr ⟨_, r', pv⟩  => exact Or.inr ⟨_, .trans' r r', pv⟩
+  case Arr hA _ ih => exact λ v pv ↦ ih (.app r) (p v pv)
 
 theorem adequacy :
   (∀ {A P} {v : Val}, ⟦ A ⟧ᵛ ↘ P → (SNeVal v → P v) ∧ (P v → SNVal v)) ∧
@@ -124,12 +133,3 @@ def 𝒱.sneVal {A P v} (h : ⟦ A ⟧ᵛ ↘ P) : SNeVal v → P v := (adequacy
 def 𝒞.sneCom {B P m} (h : ⟦ B ⟧ᶜ ↘ P) : SNeCom m → P m := (adequacy.right h).left
 def 𝒱.snVal {A P v} (h : ⟦ A ⟧ᵛ ↘ P) : P v → SNVal v := (adequacy.left h).right
 def 𝒞.snCom {B P m} (h : ⟦ B ⟧ᶜ ↘ P) : P m → SNCom m := (adequacy.right h).right
-
-theorem 𝒞.closure {B P} {m n : Com} (h : ⟦ B ⟧ᶜ ↘ P) (r : m ⤳⋆ n) : P n → P m := by
-  mutual_induction h generalizing m n
-  all_goals intro p
-  case F =>
-    match p with
-    | .inl ⟨_, r', sne⟩ => exact Or.inl ⟨_, .trans' r r', sne⟩
-    | .inr ⟨_, r', pv⟩  => exact Or.inr ⟨_, .trans' r r', pv⟩
-  case Arr hA _ ih => exact λ v pv ↦ ih (.app r (hA.snVal pv)) (p v pv)

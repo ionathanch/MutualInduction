@@ -27,19 +27,33 @@ theorem StepComs.SN {m n} (r : m ⤳⋆ᶜ n) (h : StepCom.SN m) : StepCom.SN n 
   Inversion lemmas on SN
 -----------------------*-/
 
-theorem StepCom.SN.app_inv {m v} (h : StepCom.SN (.app m v)) : StepCom.SN m := by
+theorem StepCom.SN.app_inv₁ {m v} (h : StepCom.SN (.app m v)) : StepCom.SN m := by
   generalize e : Com.app m v = n at h
   induction h generalizing m; subst e
   case sn ih =>
   constructor; intro _ r
   exact ih (.app₁ r) rfl
 
-theorem StepCom.SN.letin_inv {m₁ m₂} (h : StepCom.SN (.letin m₁ m₂)) : StepCom.SN m₁ := by
+theorem StepCom.SN.app_inv₂ {m v} (h : StepCom.SN (.app m v)) : StepVal.SN v := by
+  generalize e : Com.app m v = n at h
+  induction h generalizing v; subst e
+  case sn ih =>
+  constructor; intro _ r
+  exact ih (.app₂ r) rfl
+
+theorem StepCom.SN.letin_inv₁ {m₁ m₂} (h : StepCom.SN (.letin m₁ m₂)) : StepCom.SN m₁ := by
   generalize e : Com.letin m₁ m₂ = n at h
   induction h generalizing m₁; subst e
   case sn ih =>
   constructor; intro _ r
   exact ih (.letin₁ r) rfl
+
+theorem StepCom.SN.letin_inv₂ {m₁ m₂} (h : StepCom.SN (.letin m₁ m₂)) : StepCom.SN m₂ := by
+  generalize e : Com.letin m₁ m₂ = n at h
+  induction h generalizing m₂; subst e
+  case sn ih =>
+  constructor; intro _ r
+  exact ih (.letin₂ r) rfl
 
 /-*---------------
   Head expansion
@@ -144,8 +158,8 @@ inductive StepSN : Com → Com → Prop where
   | ret {v m} : StepVal.SN v → letin (ret v) m ⤳ⁿ m⦃v⦄
   | inl {v m n} : StepVal.SN v → StepCom.SN n → case (inl v) m n ⤳ⁿ m⦃v⦄
   | inr {v m n} : StepVal.SN v → StepCom.SN m → case (inr v) m n ⤳ⁿ n⦃v⦄
-  | app {m n : Com} {v} : StepVal.SN v → m ⤳ⁿ n → app m v ⤳ⁿ app n v
-  | letin {m m' n : Com} : StepCom.SN n → m ⤳ⁿ m' → letin m n ⤳ⁿ letin m' n
+  | app {m n : Com} {v} : m ⤳ⁿ n → app m v ⤳ⁿ app n v
+  | letin {m m' n : Com} : m ⤳ⁿ m' → letin m n ⤳ⁿ letin m' n
 end
 infix:40 "⤳ⁿ" => StepSN
 
@@ -197,21 +211,19 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     cases ih r
     case inl h =>
       let ⟨_, r₁', r₂'⟩ := h
-      exact .inl ⟨_, .app snv r₁', .app₁ r₂'⟩
+      exact .inl ⟨_, .app r₁', .app₁ r₂'⟩
     case inr e => subst e; exact .inr rfl
-  case app.app₂ snv r₁' _ _ r₂' =>
-    cases snv with | sn h =>
-    exact .inl ⟨_, .app (h r₂') r₁', .app₂ (.once r₂')⟩
+  case app.app₂ r₁' _ _ r₂' =>
+    exact .inl ⟨_, .app r₁', .app₂ (.once r₂')⟩
   case letin.ζ r _ => cases r
-  case letin.letin₁ snn _ ih _ r =>
+  case letin.letin₁ ih _ r =>
     cases ih r
     case inl h =>
       let ⟨_, r₁', r₂'⟩ := h
-      exact .inl ⟨_, .letin snn r₁', .letin₁ r₂'⟩
+      exact .inl ⟨_, .letin r₁', .letin₁ r₂'⟩
     case inr e => subst e; exact .inr rfl
-  case letin.letin₂ snn r₁ ih _ r₂ =>
-    cases snn with | sn h =>
-    exact .inl ⟨_, .letin (h r₂) r₁, .letin₂ (.once r₂)⟩
+  case letin.letin₂ r₁ ih _ r₂ =>
+    exact .inl ⟨_, .letin r₁, .letin₂ (.once r₂)⟩
 
 /-*-------------------------------------
   Backward closure of strong reduction
@@ -258,8 +270,8 @@ theorem StepSN.closure {m n} (r : m ⤳ⁿ n) (snn : StepCom.SN n) : StepCom.SN 
   case ret snv => exact .letin_ret snv snn
   case inl snv snm => exact .case_inl snv snn snm
   case inr snv snm => exact .case_inr snv snm snn
-  case app snv rn ih => exact closure_app rn (ih snn.app_inv) snv snn
-  case letin snm rn ih => exact closure_letin rn (ih snn.letin_inv) snm snn
+  case app rn ih => exact closure_app rn (ih snn.app_inv₁) snn.app_inv₂ snn
+  case letin rn ih => exact closure_letin rn (ih snn.letin_inv₁) snn.letin_inv₂ snn
 
 /-*--------------
   Neutral terms

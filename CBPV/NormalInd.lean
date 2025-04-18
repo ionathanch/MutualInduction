@@ -34,8 +34,8 @@ inductive SR : Com → Com → Prop where
   | ret {v m} : SNVal v → letin (ret v) m ⤳ m⦃v⦄
   | inl {v m n} : SNVal v → SNCom n → case (inl v) m n ⤳ m⦃v⦄
   | inr {v m n} : SNVal v → SNCom m → case (inr v) m n ⤳ n⦃v⦄
-  | app {m n : Com} {v} : SNVal v → m ⤳ n → app m v ⤳ app n v
-  | letin {m m' n : Com} : SNCom n → m ⤳ m' → letin m n ⤳ letin m' n
+  | app {m n : Com} {v} : m ⤳ n → app m v ⤳ app n v
+  | letin {m m' n : Com} : m ⤳ m' → letin m n ⤳ letin m' n
 end
 end
 infix:40 "⤳" => SR
@@ -81,15 +81,15 @@ instance : Trans SRs SRs SRs where
   Congruence on strong reduction
 -------------------------------*-/
 
-theorem SRs.app {m n : Com} {v} (r : m ⤳⋆ n) (snv : SNVal v): app m v ⤳⋆ app n v := by
+theorem SRs.app {m n : Com} {v} (r : m ⤳⋆ n) : app m v ⤳⋆ app n v := by
   induction r
   case refl => exact .refl
-  case trans r₁ _ r₂ => exact .trans (.app snv r₁) r₂
+  case trans r₁ _ r₂ => exact .trans (.app r₁) r₂
 
-theorem SRs.letin {m m' n : Com} (r : m ⤳⋆ m') (snn : SNCom n) : letin m n ⤳⋆ letin m' n := by
+theorem SRs.letin {m m' n : Com} (r : m ⤳⋆ m') : letin m n ⤳⋆ letin m' n := by
   induction r
   case refl => exact .refl
-  case trans r₁ _ r₂ => exact .trans (.letin snn r₁) r₂
+  case trans r₁ _ r₂ => exact .trans (.letin r₁) r₂
 
 theorem SRs.red {m n : Com} (r : m ⤳⋆ n) (h : SNCom n) : SNCom m := by
   induction r
@@ -204,12 +204,12 @@ theorem antirenaming {ξ} :
     cases m <;> try contradiction
     injection e with em ev
     let ⟨_, em, r⟩ := ihm em; subst em ev
-    exact ⟨.app _ _, rfl, .app (ihv rfl) r⟩
-  case srcom.letin ihn ihm  m =>
+    exact ⟨.app _ _, rfl, .app r⟩
+  case srcom.letin ihm m =>
     cases m <;> try contradiction
     injection e with em ev
     let ⟨_, em, r⟩ := ihm em; subst em ev
-    exact ⟨.letin _ _, rfl, .letin (ihn rfl) r⟩
+    exact ⟨.letin _ _, rfl, .letin r⟩
 
 def SNCom.antirenaming {ξ m} := @(@_root_.antirenaming ξ).right.right.left m
 
@@ -223,4 +223,4 @@ theorem extensionality {m x} (h : SNCom (app m (var x))) : SNCom m := by
     case lam snm _ =>
       rw [substToRename] at snm
       exact .lam (SNCom.antirenaming snm)
-    case app r _ _ h => exact .red r (h rfl)
+    case app r _ h => exact .red r (h rfl)

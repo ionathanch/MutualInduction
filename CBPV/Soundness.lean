@@ -84,19 +84,18 @@ theorem soundness {Γ} :
   case letin m n _ B _ _ ihm ihn =>
     let ⟨_, hFA, pm⟩ := ihm σ hσ
     cases hFA with | F hA =>
-    let snn := SNup hσ ihn
     match pm with
     | .inl ⟨_, r, sne⟩ =>
       let ⟨P, hB⟩ := B.interp
-      let plet := hB.sneCom (.letin sne snn)
-      exact ⟨P, hB, hB.closure (.letin r snn) plet⟩
+      let plet := hB.sneCom (.letin sne (SNup hσ ihn))
+      exact ⟨P, hB, hB.closure (.letin r) plet⟩
     | .inr ⟨v, r, pv⟩ =>
       let ⟨_, hB, pn⟩ := ihn (v +: σ) (semCtxtCons hA pv hσ)
       let r' : (letin m n)⦃σ⦄ ⤳⋆ n⦃v +: σ⦄ := by
         calc
           (letin m n)⦃σ⦄
           _ ⤳⋆ letin (m⦃σ⦄) (n⦃⇑ σ⦄)   := .refl
-          _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r snn
+          _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r
           _ ⤳⋆ n⦃⇑ σ⦄⦃v⦄               := .once (.ret (hA.snVal pv))
           _ ⤳⋆ n⦃v +: σ⦄               := by rw [← substUnion]
       exact ⟨_, hB, hB.closure r' pn⟩
