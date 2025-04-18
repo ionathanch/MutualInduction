@@ -27,13 +27,6 @@ theorem StepComs.SN {m n} (r : m ⤳⋆ᶜ n) (h : StepCom.SN m) : StepCom.SN n 
   Inversion lemmas on SN
 -----------------------*-/
 
-theorem StepCom.SN.force_inv {v} (h : StepCom.SN (.force v)) : StepVal.SN v := by
-  generalize e : Com.force v = m at h
-  induction h generalizing v; subst e
-  case sn ih =>
-  constructor; intro _ r
-  exact ih (.force r) rfl
-
 theorem StepCom.SN.app_inv {m v} (h : StepCom.SN (.app m v)) : StepCom.SN m := by
   generalize e : Com.app m v = n at h
   induction h generalizing m; subst e
@@ -71,7 +64,7 @@ theorem StepCom.SN.app_lam' {m v} (snm : StepCom.SN m) (snv : StepVal.SN v) (snm
   induction snm
   case sn.sn ihv _ hm ihm =>
   constructor; intro _ r; cases r
-  case a.β h _ => exact snmv
+  case a.β => exact snmv
   case a.app₁ r =>
     cases r with | lam r =>
     cases snmv with | sn h =>
@@ -106,8 +99,8 @@ theorem StepCom.SN.case_inl' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (
   induction snn
   case sn.sn ihv _ hm ihm _ hn ihn =>
   constructor; intro _ r; cases r
-  case a.ιl h _ => exact snmv
-  case a.case ih _ r =>
+  case a.ιl => exact snmv
+  case a.case r =>
     cases r with | inl r =>
     let snnv := (StepComs.replace r).SN snmv
     exact ihv r (.sn hm) (.sn hn) snnv
@@ -125,8 +118,8 @@ theorem StepCom.SN.case_inr' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (
   induction snn
   case sn.sn ihv _ hm ihm _ hn ihn =>
   constructor; intro _ r; cases r
-  case a.ιr h _ => exact snnv
-  case a.case ih _ r =>
+  case a.ιr => exact snnv
+  case a.case r =>
     cases r with | inr r =>
     let snnv := (StepComs.replace r).SN snnv
     exact ihv r (.sn hm) (.sn hn) snnv

@@ -28,10 +28,6 @@ theorem normalization' {Γ} :
 theorem NeCom.ne {m} (snem : SNeCom m) : NeCom m := by
   mutual_induction snem <;> assumption
 
-theorem StepVal.SN.ne {v} (h : SNeVal v) : StepVal.SN v := by
-  let ⟨_, e⟩ := h; subst e
-  constructor; intro _ r; cases r
-
 theorem SN_soundness :
   (∀ {m}, SNeCom m → StepCom.SN m) ∧
   (∀ {v}, SNVal  v → StepVal.SN v) ∧
