@@ -23,6 +23,20 @@ theorem StepComs.SN {m n} (r : m ⤳⋆ᶜ n) (h : StepCom.SN m) : StepCom.SN n 
   case refl => assumption
   case trans r _ ih => cases h with | _ ihSN => exact ih (ihSN r)
 
+/-*-------------------------------------------------
+  Ω := (λx. (force x) x) (thunk (λx. (force x) x))
+  is a diverging term
+-------------------------------------------------*-/
+
+def Ω := app ω (thunk ω) where
+  ω := lam (app (force (var 0)) (var 0))
+
+theorem loopDiverges {m n} (rmn : m ⤳ᶜ n) (rnm : n ⤳ᶜ m) (snm : StepCom.SN m) : False := by
+  induction snm generalizing n
+  case sn ih => exact ih rmn rnm rmn
+
+def ΩDiverges : StepCom.SN Ω → False := loopDiverges .β (.app₁ .π)
+
 /-*-----------------------
   Inversion lemmas on SN
 -----------------------*-/
