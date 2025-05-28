@@ -371,3 +371,21 @@ inductive In : Nat → ValType → Ctxt → Prop where
   | here {Γ A} : In 0 A (Γ ∷ A)
   | there {Γ x A B} : In x A Γ → In (succ x) A (Γ ∷ B)
 notation:40 Γ:41 "∋" x:41 "∶" A:41 => In x A Γ
+
+/-*----------------------
+  Well-scoped renamings
+----------------------*-/
+
+def wRename (ξ : Nat → Nat) Γ Δ := ∀ x A, Γ ∋ x ∶ A → Δ ∋ ξ x ∶ A
+notation:40 Δ:41 "⊢" ξ:41 "∶" Γ:41 => wRename ξ Γ Δ
+
+theorem wRenameSucc {Γ A} : Γ ∷ A ⊢ succ ∶ Γ := by
+  intro x B mem; constructor; assumption
+
+theorem wRenameLift {ξ : Nat → Nat} {Γ Δ A}
+  (h : Δ ⊢ ξ ∶ Γ) :
+  Δ ∷ A ⊢ lift ξ ∶ Γ ∷ A := by
+  intro x B mem
+  cases mem with
+  | here => exact In.here
+  | there => apply_rules [In.there]

@@ -1,6 +1,6 @@
 import CBPV.Syntax
 
-open ValType ComType Val Com
+open Nat ValType ComType Val Com
 
 section
 set_option hygiene false
@@ -61,3 +61,36 @@ end
 
 notation:40 Γ:41 "⊢" v:41 "∶" A:41 => ValWt Γ v A
 notation:40 Γ:41 "⊢" m:41 "∶" B:41 => ComWt Γ m B
+
+/-*------------------------------
+  Renaming and weakening lemmas
+------------------------------*-/
+
+theorem wtRename {ξ} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) :
+  (∀ {v} {A : ValType}, Γ ⊢ v ∶ A → Δ ⊢ renameVal ξ v ∶ A) ∧
+  (∀ {m} {B : ComType}, Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B) := by
+  refine ⟨λ h ↦ ?wtv, λ h ↦ ?wtm⟩
+  mutual_induction h, h generalizing ξ Δ
+  case wtv.var mem => exact .var (hξ _ _ mem)
+  case wtv.unit => exact .unit
+  case wtv.inl ih => exact .inl (ih hξ)
+  case wtv.inr ih => exact .inr (ih hξ)
+  case wtv.thunk ih => exact .thunk (ih hξ)
+  case wtm.force ih => exact .force (ih hξ)
+  case wtm.lam ih => exact .lam (ih (wRenameLift hξ))
+  case wtm.app ihm ihv => exact .app (ihm hξ) (ihv hξ)
+  case wtm.ret ih => exact .ret (ih hξ)
+  case wtm.letin ihm ihn => exact .letin (ihm hξ) (ihn (wRenameLift hξ))
+  case wtm.case ihv ihm ihn => exact .case (ihv hξ) (ihm (wRenameLift hξ)) (ihn (wRenameLift hξ))
+
+theorem wtRenameCom {ξ} {Γ Δ : Ctxt} {m} {B : ComType} :
+  Δ ⊢ ξ ∶ Γ → Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B :=
+  λ hξ ↦ (wtRename hξ).right
+
+theorem wtWeakenCom {Γ A B} {m : Com} :
+  Γ ⊢ m ∶ B → Γ ∷ A ⊢ renameCom succ m ∶ B :=
+  wtRenameCom wRenameSucc
+
+theorem wtWeakenCom₂ {Γ A₁ A₂ B} {m : Com} :
+  Γ ∷ A₂ ⊢ m ∶ B → Γ ∷ A₁ ∷ A₂ ⊢ renameCom (lift succ) m ∶ B :=
+  wtRenameCom (wRenameLift wRenameSucc)
