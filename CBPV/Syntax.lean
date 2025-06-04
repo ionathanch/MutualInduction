@@ -111,7 +111,7 @@ theorem renameExt ξ ζ (h : ∀ x, ξ x = ζ x) :
   all_goals apply_rules [liftExt]
 
 def renameValExt ξ ζ h := (renameExt ξ ζ h).left
-def renameCompExt ξ ζ h := (renameExt ξ ζ h).right
+def renameComExt ξ ζ h := (renameExt ξ ζ h).right
 
 -- Applying identity renaming does nothing
 theorem renameId :
@@ -122,7 +122,7 @@ theorem renameId :
   all_goals simp; try repeat' constructor
   all_goals try assumption
   all_goals unfold Function.comp id
-  all_goals rw [renameCompExt (0 +: succ) id]
+  all_goals rw [renameComExt (0 +: succ) id]
   all_goals apply_rules [liftId]
 
 def renameValId := renameId.left
