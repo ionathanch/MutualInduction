@@ -132,18 +132,18 @@ notation:40 Γ:41 "⊢ₛ" t:41 "∶" A:41 => Wt Γ t A
 
 /-* CK machine semantics *-/
 
-inductive Fᵥ : Type where
-  | app₁ : Term → Fᵥ
-  | app₂ : Value → Fᵥ
-  | case : Term → Term → Fᵥ
+inductive F : Type where
+  | app₁ : Term → F
+  | app₂ : Value → F
+  | case : Term → Term → F
 
-def Kᵥ := List Fᵥ
-def CKᵥ := Term × Kᵥ
+def K := List F
+def CK := Term × K
 
 section
 set_option hygiene false
 local infix:40 "⤳ᵥ" => Step
-inductive Step : CKᵥ → CKᵥ → Prop where
+inductive Step : CK → CK → Prop where
   | β  {t v k} :     ⟨.val v, .app₂ (.lam t) :: k⟩  ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιl {v t u k} :   ⟨.val (inl v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιr {v t u k} :   ⟨.val (inr v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) u, k⟩
@@ -227,7 +227,7 @@ section
 set_option hygiene false
 local notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 @[simp]
-def transK : CBV.Kᵥ → K
+def transK : CBV.K → K
   | [] => []
   | .app₁ u :: k   => .letin (.letin (renameCom succ (⟦ u ⟧ᵗ))
                         (.app (.force (.var 1)) (.var 0))) :: (⟦ k ⟧ᴷ)
@@ -236,13 +236,13 @@ def transK : CBV.Kᵥ → K
                         (renameCom (lift succ) (⟦ t ⟧ᵗ))
                         (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
 end
-local notation:40 "⟦" k:41 "⟧ᴷ" => transK k
+notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 
-/-*----------------------------------------
-  Preservation properties of translations
-----------------------------------------*-/
+/-*---------------------------------------
+  Preservation properties of translation
+---------------------------------------*-/
 
-/-* Translation of CBV is type preserving *-/
+/-* Translation is type preserving *-/
 
 theorem presIn {x A Γ} (h : CBV.In x A Γ) : (⟦ Γ ⟧ᶜ) ∋ x ∶ (⟦ A ⟧ᵀ) := by
   induction h <;> constructor; assumption

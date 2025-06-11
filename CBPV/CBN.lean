@@ -1,8 +1,9 @@
 import CBPV.Typing
+import CBPV.CK
 
 open Nat
 
-namespace STLC
+namespace CBN
 
 /-* Types and terms *-/
 
@@ -21,6 +22,33 @@ inductive Term : Type where
   | inr : Term → Term
   | case : Term → Term → Term → Term
 open Term
+
+/-* Renaming and substitution *-/
+
+@[simp]
+def rename (ξ : Nat → Nat) : Term → Term
+  | var x => var (ξ x)
+  | unit => unit
+  | lam t => lam (rename (lift ξ) t)
+  | app t u => app (rename ξ t) (rename ξ u)
+  | inl t => inl (rename ξ t)
+  | inr t => inr (rename ξ t)
+  | case s t u => case (rename ξ s) (rename (lift ξ) t) (rename (lift ξ) u)
+
+@[simp]
+def up (σ : Nat → Term) : Nat → Term :=
+  var 0 +: (rename succ ∘ σ)
+prefix:95 "⇑" => up
+
+@[simp]
+def subst (σ : Nat → Term) : Term → Term
+  | var x => σ x
+  | unit => unit
+  | lam t => lam (subst (⇑ σ) t)
+  | app t u => app (subst σ t) (subst σ u)
+  | inl t => inl (subst σ t)
+  | inr t => inr (subst σ t)
+  | case s t u => case (subst σ s) (subst (⇑ σ) t) (subst (⇑ σ) u)
 
 /-* Contexts and membership *-/
 
@@ -71,110 +99,59 @@ inductive Wt : Ctxt → Term → SType → Prop where
 end
 notation:40 Γ:41 "⊢ₛ" v:41 "∶" A:41 => Wt Γ v A
 
-end STLC
+/-* CK machine semantics *-/
 
-/-*--------------------------
-  Call by value translation
---------------------------*-/
+inductive F : Type where
+  | app : Term → F
+  | case : Term → Term → F
 
-namespace CBV
+def K := List F
+def CK := Term × K
 
-/-* Translation of types *-/
 section
 set_option hygiene false
-local notation:40 "⟦" A:41 "⟧ᵀ" => transType A
-def transType : STLC.SType → ValType
-  | .Unit => .Unit
-  | .Sum A₁ A₂ => .Sum (⟦ A₁ ⟧ᵀ) (⟦ A₂ ⟧ᵀ)
-  | .Arr A B => .U (.Arr (⟦ A ⟧ᵀ) (.F (⟦ B ⟧ᵀ)))
+local infix:40 "⤳ₙ" => Step
+inductive Step : CK → CK → Prop where
+  | β {t u k} :      ⟨lam t, .app u :: k⟩     ⤳ₙ ⟨subst (u +: var) t, k⟩
+  | ιl {s t u k} :   ⟨inl s, .case t u :: k ⟩ ⤳ₙ ⟨subst (s +: var) t, k⟩
+  | ιr {s t u k} :   ⟨inr s, .case t u :: k ⟩ ⤳ₙ ⟨subst (s +: var) u, k⟩
+  | app {t u k} :    ⟨app t u, k⟩             ⤳ₙ ⟨t, .app u :: k⟩
+  | case {s t u k} : ⟨case s t u, k⟩          ⤳ₙ ⟨s, .case t u :: k⟩
 end
-local notation:40 "⟦" A:41 "⟧ᵀ" => transType A
+infix:40 "⤳ₙ" => Step
 
-/-* Translation of contexts *-/
-section
-set_option hygiene false
-local notation:40 "⟦" Γ:41 "⟧ᶜ" => transCtxt Γ
-def transCtxt : STLC.Ctxt → Ctxt
-  | .nil => .nil
-  | .cons Γ A => .cons (⟦ Γ ⟧ᶜ) (⟦ A ⟧ᵀ)
-end
-local notation:40 "⟦" Γ:41 "⟧ᶜ" => transCtxt Γ
-
-/-* Translation of terms *-/
-section
-set_option hygiene false
-local notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
-def transTerm : STLC.Term → Com
-  | .var s => .ret (.var s)
-  | .unit => .ret .unit
-  | .lam t => .ret (.thunk (.lam (⟦ t ⟧ᵗ)))
-  | .app t u =>
-    .letin (⟦ t ⟧ᵗ)
-      (.letin (renameCom succ (⟦ u ⟧ᵗ))
-        (.app (.force (.var 1)) (.var 0)))
-  | .inl t => .letin (⟦ t ⟧ᵗ) (.ret (.inl (.var 0)))
-  | .inr t => .letin (⟦ t ⟧ᵗ) (.ret (.inr (.var 0)))
-  | .case s t u =>
-    .letin (⟦ s ⟧ᵗ)
-      (.case (.var 0)
-        (renameCom (lift succ) (⟦ t ⟧ᵗ))
-        (renameCom (lift succ) (⟦ u ⟧ᵗ)))
-end
-local notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
-
-/-* Translation of CBV is type preserving *-/
-
-theorem presIn {x A Γ} (h : STLC.In x A Γ) : (⟦ Γ ⟧ᶜ) ∋ x ∶ (⟦ A ⟧ᵀ) := by
-  induction h <;> constructor; assumption
-
-theorem preservation {Γ t A} (h : Γ ⊢ₛ t ∶ A) : (⟦ Γ ⟧ᶜ) ⊢ (⟦ t ⟧ᵗ) ∶ .F (⟦ A ⟧ᵀ) := by
-  induction h
-  case var ih => exact .ret (.var (presIn ih))
-  case unit => exact .ret .unit
-  case lam ih => exact .ret (.thunk (.lam ih))
-  case app iht ihu =>
-    exact .letin iht
-      (.letin (wtWeakenCom ihu)
-        (.app (.force (.var (.there .here))) (.var .here)))
-  case inl ih => exact .letin ih (.ret (.inl (.var .here)))
-  case inr ih => exact .letin ih (.ret (.inr (.var .here)))
-  case case ihs iht ihu =>
-    exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
-
-end CBV
+end CBN
 
 /-*-------------------------
   Call by name translation
 -------------------------*-/
 
-namespace CBN
-
 /-* Translation of types *-/
 section
 set_option hygiene false
 local notation:40 "⟦" A:41 "⟧ᵀ" => transType A
-def transType : STLC.SType → ComType
+def transType : CBN.SType → ComType
   | .Unit => .F .Unit
   | .Sum A₁ A₂ => .F (.Sum (.U (⟦ A₁ ⟧ᵀ)) (.U (⟦ A₂ ⟧ᵀ)))
   | .Arr A B => .Arr (.U (⟦ A ⟧ᵀ)) (⟦ B ⟧ᵀ)
 end
-local notation:40 "⟦" A:41 "⟧ᵀ" => transType A
+notation:40 "⟦" A:41 "⟧ᵀ" => transType A
 
 /-* Translation of contexts *-/
 section
 set_option hygiene false
 local notation:40 "⟦" Γ:41 "⟧ᶜ" => transCtxt Γ
-def transCtxt : STLC.Ctxt → Ctxt
+def transCtxt : CBN.Ctxt → Ctxt
   | .nil => .nil
   | .cons Γ A => .cons (⟦ Γ ⟧ᶜ) (.U (⟦ A ⟧ᵀ))
 end
-local notation:40 "⟦" Γ:41 "⟧ᶜ" => transCtxt Γ
+notation:40 "⟦" Γ:41 "⟧ᶜ" => transCtxt Γ
 
 /-* Translation of terms *-/
 section
 set_option hygiene false
 local notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
-def transTerm : STLC.Term → Com
+def transTerm : CBN.Term → Com
   | .var s => .force (.var s)
   | .unit => .ret .unit
   | .lam t =>.lam (⟦ t ⟧ᵗ)
@@ -187,11 +164,32 @@ def transTerm : STLC.Term → Com
         (renameCom (lift succ) (⟦ t ⟧ᵗ))
         (renameCom (lift succ) (⟦ u ⟧ᵗ)))
 end
-local notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
+notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
 
-/-* Translation of CBV is type preserving *-/
+@[simp] def transSubst' (σ : Nat → CBN.Term) : Nat → Com := λ x ↦ ⟦ σ x ⟧ᵗ
+notation:40 "⟦" σ:41 "⟧ˢ" => transSubst' σ
 
-theorem presIn {x A Γ} (h : STLC.In x A Γ) : (⟦ Γ ⟧ᶜ) ∋ x ∶ .U (⟦ A ⟧ᵀ) := by
+/-* Translation of stacks *-/
+section
+set_option hygiene false
+local notation:40 "⟦" k:41 "⟧ᴷ" => transK k
+@[simp]
+def transK : CBN.K → K
+  | [] => []
+  | .app u :: k   => .app (.thunk (⟦ u ⟧ᵗ)) :: (⟦ k ⟧ᴷ)
+  | .case t u :: k => .letin (.case (.var 0)
+                        (renameCom (lift succ) (⟦ t ⟧ᵗ))
+                        (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
+end
+notation:40 "⟦" k:41 "⟧ᴷ" => transK k
+
+/-*---------------------------------------
+  Preservation properties of translation
+---------------------------------------*-/
+
+/-* Translation is type preserving *-/
+
+theorem presIn {x A Γ} (h : CBN.In x A Γ) : (⟦ Γ ⟧ᶜ) ∋ x ∶ .U (⟦ A ⟧ᵀ) := by
   induction h <;> constructor; assumption
 
 theorem preservation {Γ t A} (h : Γ ⊢ₛ t ∶ A) : (⟦ Γ ⟧ᶜ) ⊢ (⟦ t ⟧ᵗ) ∶ (⟦ A ⟧ᵀ) := by
@@ -204,5 +202,3 @@ theorem preservation {Γ t A} (h : Γ ⊢ₛ t ∶ A) : (⟦ Γ ⟧ᶜ) ⊢ (⟦
   case inr ih => exact .ret (.inr (.thunk ih))
   case case ihs iht ihu =>
     exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
-
-end CBN

@@ -315,10 +315,20 @@ def renameToSubstCom ξ := (renameToSubst ξ).right
   Handy dandy derived renaming substitution lemmas
 -------------------------------------------------*-/
 
-theorem substDrop v w : w = substVal (v +: var) (renameVal succ w) := by
+theorem substDropVal v w : w = substVal (v +: var) (renameVal succ w) := by
   calc
     w = substVal var w                         := by rw [substValId]
     _ = substVal (v +: var) (renameVal succ w) := by rw [substRenameVal]; rfl
+
+theorem substDropCom v m : m = substCom (v +: var) (renameCom succ m) := by
+  calc
+    m = substCom var m                         := by rw [substComId]
+    _ = substCom (v +: var) (renameCom succ m) := by rw [substRenameCom]; rfl
+
+theorem substDropCom₂ v w m : substCom (v +: w +: .var) (renameCom (lift succ) m) = substCom (v +: var) m := by
+  calc substCom (v +: w +: .var) (renameCom (lift succ) m)
+    _ = substCom ((v +: w +: var) ∘ lift succ) m := by rw [substRenameCom]
+    _ = substCom (v +: var) m := by rw [substComExt _ _]; intro n; cases n <;> rfl
 
 theorem substDrop₂ σ v₁ v₂ m : substCom (v₁ +: v₂ +: σ) (renameCom (lift succ) m) = substCom (v₁ +: σ) m := by
   calc substCom (v₁ +: v₂ +: σ) (renameCom (lift succ) m)
@@ -330,7 +340,7 @@ theorem substDrop₂ σ v₁ v₂ m : substCom (v₁ +: v₂ +: σ) (renameCom (
 theorem substUnion σ a m : substCom (a +: σ) m = substCom (a +: var) (substCom (⇑ σ) m) := by
   calc substCom (a +: σ) m
     _ = substCom (substVal (a +: var) ∘ (var 0 +: (renameVal succ ∘ σ))) m :=
-        by apply substComExt; intro n; cases n <;> simp; rw [← substDrop]
+        by apply substComExt; intro n; cases n <;> simp; rw [← substDropVal]
     _ = substCom (a +: var) (substCom (⇑ σ) m) :=
         by rw [← substComComp]; rfl
 
