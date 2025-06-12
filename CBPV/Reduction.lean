@@ -1,3 +1,4 @@
+import CBPV.RTC
 import CBPV.Syntax
 
 open Val Com
@@ -60,6 +61,11 @@ end
 infix:40 "⤳ᵛ" => StepVal
 infix:40 "⤳ᶜ" => StepCom
 
+@[reducible] def StepVals := RTC StepVal
+@[reducible] def StepComs := RTC StepCom
+infix:40 "⤳⋆ᵛ" => StepVals
+infix:40 "⤳⋆ᶜ" => StepComs
+
 /-*---------------------------------
   Renaming and substitution lemmas
   on single-step reduction
@@ -88,40 +94,6 @@ theorem stepSubstitution σ :
 
 def StepVal.subst {v w} σ := @(stepSubstitution σ).left v w
 def StepCom.subst {m n} σ := @(stepSubstitution σ).right m n
-
-/-*---------------------
-  Multi-step reduction
----------------------*-/
-
-section
-set_option hygiene false
-local infix:40 "⤳⋆ᵛ" => StepVals
-local infix:40 "⤳⋆ᶜ" => StepComs
-
-inductive StepVals : Val → Val → Prop where
-  | refl {a} : a ⤳⋆ᵛ a
-  | trans {a b c} : a ⤳ᵛ b → b ⤳⋆ᵛ c → a ⤳⋆ᵛ c
-
-inductive StepComs : Com → Com → Prop where
-  | refl {a} : a ⤳⋆ᶜ a
-  | trans {a b c} : a ⤳ᶜ b → b ⤳⋆ᶜ c → a ⤳⋆ᶜ c
-end
-
-infix:40 "⤳⋆ᵛ" => StepVals
-infix:40 "⤳⋆ᶜ" => StepComs
-
-def StepVals.once {a b} (r : a ⤳ᵛ b) : a ⤳⋆ᵛ b := .trans r .refl
-def StepComs.once {a b} (r : a ⤳ᶜ b) : a ⤳⋆ᶜ b := .trans r .refl
-
-theorem StepVals.trans' {a b c} (r₁ : a ⤳⋆ᵛ b) (r₂ : b ⤳⋆ᵛ c) : a ⤳⋆ᵛ c := by
-  induction r₁ generalizing c
-  case refl => exact r₂
-  case trans r₁ _ ih => exact .trans r₁ (ih r₂)
-
-theorem StepComs.trans' {a b c} (r₁ : a ⤳⋆ᶜ b) (r₂ : b ⤳⋆ᶜ c) : a ⤳⋆ᶜ c := by
-  induction r₁ generalizing c
-  case refl => exact r₂
-  case trans r₁ _ ih => exact .trans r₁ (ih r₂)
 
 /-*-----------------------------------------
   Congruence rules on multi-step reduction
@@ -168,7 +140,7 @@ theorem StepComs.app₂ {m v w} (r : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app m w 
   case trans r₁ _ r₂ => exact .trans (.app₂ r₁) r₂
 
 theorem StepComs.app {m n v w} (rm : m ⤳⋆ᶜ n) (rv : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app n w :=
-  .trans' (.app₁ rm) (.app₂ rv)
+  Trans.trans (StepComs.app₁ rm) (StepComs.app₂ rv)
 
 theorem StepComs.letin₁ {m m' n} (r : m ⤳⋆ᶜ m') : letin m n ⤳⋆ᶜ letin m' n := by
   induction r
@@ -181,7 +153,7 @@ theorem StepComs.letin₂ {m n n'} (r : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ le
   case trans r₁ _ r₂ => exact .trans (.letin₂ r₁) r₂
 
 theorem StepComs.letin {m m' n n'} (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ letin m' n' :=
-  .trans' (.letin₁ rm) (.letin₂ rn)
+  Trans.trans (StepComs.letin₁ rm) (StepComs.letin₂ rn)
 
 theorem StepComs.case₀ {v w m n} (r : v ⤳⋆ᵛ w) : case v m n ⤳⋆ᶜ case w m n := by
   induction r
@@ -199,7 +171,7 @@ theorem StepComs.case₂ {v m n n'} (r : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ 
   case trans r₁ _ r₂ => exact .trans (.case₂ r₁) r₂
 
 theorem StepComs.case {v w m m' n n'} (rv : v ⤳⋆ᵛ w) (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ case w m' n' :=
-  .trans' (.case₀ rv) (.trans' (.case₁ rm) (.case₂ rn))
+  Trans.trans (StepComs.case₀ rv) (Trans.trans (StepComs.case₁ rm) (StepComs.case₂ rn))
 
 /-*--------------------------------------------
   Substitution lemmas on multi-step reduction
@@ -228,7 +200,7 @@ theorem StepComs.subst {m n} (σ : Nat → Val) (r : m ⤳⋆ᶜ n) : m⦃σ⦄ 
 theorem StepVals.lift {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x) : ∀ x, (⇑ σ) x ⤳⋆ᵛ (⇑ τ) x := by
   intro n; cases n
   case zero => exact .refl
-  case succ n => exact StepVals.rename Nat.succ (h n)
+  case succ n => exact .rename Nat.succ (h n)
 
 theorem stepReplace {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x):
   (∀ {v}, v⦃σ⦄ ⤳⋆ᵛ v⦃τ⦄) ∧
@@ -247,7 +219,7 @@ theorem stepReplace {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x):
   case letin ihm ihn => exact .letin (ihm h) (ihn (.lift h))
   case case ihv ihm ihn => exact .case (ihv h) (ihm (.lift h)) (ihn (.lift h))
 
-theorem StepComs.replace {m : Com} {v w : Val} (r : v ⤳ᵛ w) : m⦃v⦄ ⤳⋆ᶜ m⦃w⦄ := by
+theorem StepVal.replace {m : Com} {v w : Val} (r : v ⤳ᵛ w) : m⦃v⦄ ⤳⋆ᶜ m⦃w⦄ := by
   refine @(stepReplace ?ext).right m
   intro n; cases n
   case zero => exact .once r

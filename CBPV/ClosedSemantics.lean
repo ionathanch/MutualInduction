@@ -44,7 +44,7 @@ theorem 𝒞nf {B m} (h : m ∈ ⟦ B ⟧ᶜ) : nf m :=
 
 -- Semantic computations embed into semantic evaluations
 theorem 𝒞ℰ {B m} (h : m ∈ ⟦ B ⟧ᶜ) : m ∈ ⟦ B ⟧ᵉ :=
-  by simp; exact ⟨m, ⟨.refl m, 𝒞nf h⟩, h⟩
+  by simp; exact ⟨m, ⟨.refl, 𝒞nf h⟩, h⟩
 
 -- Semantic evaluations are backward closed under reduction
 theorem ℰbwd {B m n} (r : m ⇒⋆ n) (h : n ∈ ⟦ B ⟧ᵉ) : m ∈ ⟦ B ⟧ᵉ := by
@@ -103,14 +103,14 @@ theorem soundness {Γ} :
     simp at ihm
     let ⟨_, ⟨rlam, _⟩, _, h, e⟩ := ihm σ hσ; subst e
     let ⟨_, ⟨rval, _⟩, h⟩ := h _ (ihv σ hσ)
-    exact 𝒞bwd (.trans' (.app rlam) (.trans .lam rval)) h
+    exact 𝒞bwd (Trans.trans (Evals.app rlam) (Trans.trans Eval.lam rval)) h
   case ret ih => exact 𝒞ℰ (𝒞.ret (ih σ hσ))
   case letin ihret ih =>
     simp at ihret ih
     let ⟨_, ⟨rret, _⟩, v, hv, e⟩ := ihret σ hσ; subst e
     let ⟨_, ⟨rlet, nflet⟩, h⟩ := ih (v +: σ) (semCtxtCons hv hσ)
     rw [substUnion] at rlet
-    exact 𝒞bwd (.trans' (.let rret) (.trans .ret rlet)) h
+    exact 𝒞bwd (Trans.trans (Evals.let rret) (Trans.trans Eval.ret rlet)) h
   case case m n _ _ _ _ _ _ ihv ihm ihn =>
     simp at ihv
     match ihv σ hσ with

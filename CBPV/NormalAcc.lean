@@ -98,7 +98,7 @@ theorem StepCom.SN.app_lam' {m v} (snm : StepCom.SN m) (snv : StepVal.SN v) (snm
     cases snmv with | sn h =>
     exact ihm r (h (.subst _ r))
   case a.app₂ m _ r =>
-    let snnv := (StepComs.replace r).SN snmv
+    let snnv := r.replace.SN snmv
     exact ihv r (.sn hm) snnv
 
 theorem StepCom.SN.app_lam {m v} (snv : StepVal.SN v) (snmv : StepCom.SN (m⦃v⦄)): StepCom.SN (Com.app (Com.lam m) v) :=
@@ -112,7 +112,7 @@ theorem StepCom.SN.letin_ret' {m v} (snm : StepCom.SN m) (snv : StepVal.SN v) (s
   case a.ζ h _ => exact snmv
   case a.letin₁ ih _ r =>
     cases r with | ret r =>
-    let snnv := (StepComs.replace r).SN snmv
+    let snnv := r.replace.SN snmv
     exact ihv r (.sn hm) snnv
   case a.letin₂ r =>
     cases snmv with | sn h =>
@@ -130,7 +130,7 @@ theorem StepCom.SN.case_inl' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (
   case a.ιl => exact snmv
   case a.case r =>
     cases r with | inl r =>
-    let snnv := (StepComs.replace r).SN snmv
+    let snnv := r.replace.SN snmv
     exact ihv r (.sn hm) (.sn hn) snnv
   case a.case₁ r =>
     cases snmv with | sn h =>
@@ -149,7 +149,7 @@ theorem StepCom.SN.case_inr' {v m n} (snv : StepVal.SN v) (snm : StepCom.SN m) (
   case a.ιr => exact snnv
   case a.case r =>
     cases r with | inr r =>
-    let snnv := (StepComs.replace r).SN snnv
+    let snnv := r.replace.SN snnv
     exact ihv r (.sn hm) (.sn hn) snnv
   case a.case₁ r => exact ihm r (.sn hn) snnv
   case a.case₂ r =>
@@ -192,19 +192,19 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
     exact .inl ⟨_, .lam snv, .subst _ (.once r)⟩
   case lam.app₂ snv _ r =>
     cases snv with | sn h =>
-    exact .inl ⟨_, .lam (h r), .replace r⟩
+    exact .inl ⟨_, .lam (h r), r.replace⟩
   case ret.ζ => exact .inr rfl
   case ret.letin₁ snv _ r =>
     cases r with | ret r =>
     cases snv with | sn h =>
-    exact .inl ⟨_, .ret (h r), .replace r⟩
+    exact .inl ⟨_, .ret (h r), r.replace⟩
   case ret.letin₂ snv _ r =>
     exact .inl ⟨_, .ret snv, .subst _ (.once r)⟩
   case inl.ιl => exact .inr rfl
   case inl.case snv snn _ r =>
     cases r with | inl r =>
     cases snv with | sn h =>
-    exact .inl ⟨_, .inl (h r) snn, .replace r⟩
+    exact .inl ⟨_, .inl (h r) snn, r.replace⟩
   case inl.case₁ snv snn _ r =>
     exact .inl ⟨_, .inl snv snn, .subst _ (.once r)⟩
   case inl.case₂ snv snn _ r =>
@@ -214,7 +214,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⤳ᶜ n₁) (r₂ : m ⤳ⁿ n₂) :
   case inr.case snv snm _ r =>
     cases r with | inr r =>
     cases snv with | sn h =>
-    exact .inl ⟨_, .inr (h r) snm, .replace r⟩
+    exact .inl ⟨_, .inr (h r) snm, r.replace⟩
   case inr.case₁ snv snm _ r =>
     cases snm with | sn h =>
     exact .inl ⟨_, .inr snv (h r), .refl⟩

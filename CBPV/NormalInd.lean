@@ -1,3 +1,4 @@
+import CBPV.RTC
 import CBPV.Syntax
 
 open ValType ComType Val Com
@@ -40,6 +41,9 @@ end
 end
 infix:40 "⤳" => SR
 
+@[reducible] def SRs := RTC SR
+infix:40 "⤳⋆" => SRs
+
 /-*-----------------------------------------
   Inversion lemmas on strong normalization
 -----------------------------------------*-/
@@ -51,31 +55,6 @@ theorem SNCom.force_inv {v} (h : SNCom (force v)) : SNVal v := by
   case ne sne => match sne with
   | .force ⟨_, e⟩ => subst e; exact .var
   case red sn ih r => cases r; exact .thunk sn
-
-/-*---------------------------------------
-  Transitive closure of strong reduction
----------------------------------------*-/
-
-section
-set_option hygiene false
-local infix:40 "⤳⋆" => SRs
-inductive SRs : Com → Com → Prop where
-  | refl {m : Com} : m ⤳⋆ m
-  | trans {k m n : Com} : k ⤳ m → m ⤳⋆ n → k ⤳⋆ n
-end
-infix:40 "⤳⋆" => SRs
-
-@[refl] def SRs.rfl {m} := @SRs.refl m
-
-def SRs.once {m n : Com} (r : m ⤳ n) : m ⤳⋆ n := .trans r .refl
-
-theorem SRs.trans' {k m n : Com} (r₁ : k ⤳⋆ m) (r₂ : m ⤳⋆ n) : k ⤳⋆ n := by
-  induction r₁ generalizing n
-  case refl => exact r₂
-  case trans r _ ih => exact .trans r (ih r₂)
-
-instance : Trans SRs SRs SRs where
-  trans := SRs.trans'
 
 /-*-------------------------------
   Congruence on strong reduction

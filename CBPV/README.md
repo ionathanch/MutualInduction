@@ -20,6 +20,7 @@ are all mutually defined, and eliminating them generally requires mutual inducti
 
 The structure of the proofs begins with the usual basics.
 
+* RTC.lean: Reflexive, transitive closure of binary relations
 * Syntax.lean: Syntax, renaming, substitution, and contexts
 * Typing.lean: Typing rules, renaming, and weakening
 * Evaluation.lean: Evaluation of (closed) commands,
@@ -54,7 +55,8 @@ Remaining proof files show interesting properties of CBPV.
   similar to the antirenaming lemma.
 
 ```
-        ╭───────┬──Syntax───┬─────────╮
+        ╭──────────RTC──────┬─────────╮
+        ├───────┬──Syntax───┼─────────┤
         │       │           │         │
         ▼       ▼           ▼         ▼
 Evaluation    Typing    NormalInd    Reduction

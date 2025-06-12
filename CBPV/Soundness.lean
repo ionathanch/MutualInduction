@@ -65,13 +65,13 @@ theorem soundness {Γ} :
     refine ⟨_, .Arr hA hB, λ v pv ↦ ?_⟩
     let ⟨_, hB', pm⟩ := ih (v +: σ) (semCtxtCons hA pv hσ)
     rw [𝒞.det hB' hB] at pm
-    let r : app ((lam m)⦃σ⦄) v ⤳⋆ m⦃v +: σ⦄ := by
+    let r : app ((lam m)⦃σ⦄) v ⤳ m⦃v +: σ⦄ := by
       calc
         app ((lam m)⦃σ⦄) v
-        _ ⤳⋆ app (lam (m⦃⇑ σ⦄)) v := .refl
-        _ ⤳⋆ m⦃⇑ σ⦄⦃v⦄            := .once (.lam (hA.snVal pv))
-        _ ⤳⋆ m⦃v +: σ⦄            := by rw [← substUnion]
-    exact hB.closure r pm
+        _ = app (lam (m⦃⇑ σ⦄)) v := rfl
+        _ ⤳ m⦃⇑ σ⦄⦃v⦄            := .lam (hA.snVal pv)
+        _ = (m⦃v +: σ⦄)          := by rw [← substUnion]
+    exact hB.closure (.once r) pm
   case app ihm ihv =>
     let ⟨_, hArr, pm⟩ := ihm σ hσ
     let ⟨_, hA, pv⟩ := ihv σ hσ
@@ -94,10 +94,10 @@ theorem soundness {Γ} :
       let r' : (letin m n)⦃σ⦄ ⤳⋆ n⦃v +: σ⦄ := by
         calc
           (letin m n)⦃σ⦄
-          _ ⤳⋆ letin (m⦃σ⦄) (n⦃⇑ σ⦄)   := .refl
+          _ = letin (m⦃σ⦄) (n⦃⇑ σ⦄)    := rfl
           _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r
-          _ ⤳⋆ n⦃⇑ σ⦄⦃v⦄               := .once (.ret (hA.snVal pv))
-          _ ⤳⋆ n⦃v +: σ⦄               := by rw [← substUnion]
+          _ ⤳ n⦃⇑ σ⦄⦃v⦄                := .ret (hA.snVal pv)
+          _ = (n⦃v +: σ⦄)              := by rw [← substUnion]
       exact ⟨_, hB, hB.closure r' pn⟩
   case case v m n _ _ B _ _ _ ihv ihm ihn =>
     let ⟨_, hSum, pv⟩ := ihv σ hσ
@@ -112,20 +112,20 @@ theorem soundness {Γ} :
       let snv := hA₁.snVal pv
       let ⟨R, hB, rm⟩ := ihm (w +: σ) (semCtxtCons hA₁ pv hσ)
       simp only [substCom]
-      let r : (case v m n)⦃σ⦄ ⤳⋆ m⦃w +: σ⦄ := by
+      let r : (case v m n)⦃σ⦄ ⤳ m⦃w +: σ⦄ := by
         calc
           (case v m n)⦃σ⦄
-          _ ⤳⋆ (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
-          _ ⤳⋆ m⦃⇑ σ⦄⦃w⦄                        := .once (.inl snv snn)
-          _ ⤳⋆ m⦃w +: σ⦄                        := by rw [← substUnion]
-      exact ⟨R, hB, hB.closure r rm⟩
+          _ = (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
+          _ ⤳ m⦃⇑ σ⦄⦃w⦄                        := .inl snv snn
+          _ = (m⦃w +: σ⦄)                      := by rw [← substUnion]
+      exact ⟨R, hB, hB.closure (.once r) rm⟩
     | .inr (.inr ⟨w, e, qv⟩) =>
       let snv := hA₂.snVal qv
       let ⟨R, hB, rm⟩ := ihn (w +: σ) (semCtxtCons hA₂ qv hσ)
-      let r' : (case v m n)⦃σ⦄ ⤳⋆ n⦃w +: σ⦄ := by
+      let r' : (case v m n)⦃σ⦄ ⤳ n⦃w +: σ⦄ := by
         calc
           (case v m n)⦃σ⦄
-          _ ⤳⋆ case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
-          _ ⤳⋆ n⦃⇑ σ⦄⦃w⦄                      := .once (.inr snv snm)
-          _ ⤳⋆ n⦃w +: σ⦄                      := by rw [← substUnion]
-      exact ⟨R, hB, hB.closure r' rm⟩
+          _ = case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
+          _ ⤳ n⦃⇑ σ⦄⦃w⦄                      := .inr snv snm
+          _ = (n⦃w +: σ⦄)                    := by rw [← substUnion]
+      exact ⟨R, hB, hB.closure (.once r') rm⟩

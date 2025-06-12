@@ -82,6 +82,12 @@ end
 infix:40 "⤳ᵛ" => RedVal
 infix:40 "⤳ᶜ" => RedCom
 
+@[reducible] def RedVals := RTC RedVal
+@[reducible] def RedComs := RTC RedCom
+
+infix:40 "⤳⋆ᵛ" => RedVals
+infix:40 "⤳⋆ᶜ" => RedComs
+
 /-*--------------------------------------------
   Properties of leftmost outermost reduction:
   * Neutral and normal forms don't reduce
@@ -170,40 +176,6 @@ theorem determinism :
     case case₀ r => cases r
     case case₁ nfm _ _ r => cases nfm.normality r
     case case₂ r => rw [ih r]
-
-/-*----------------------------------------
-  Multi-step leftmost outermost reduction
-----------------------------------------*-/
-
-section
-set_option hygiene false
-local infix:40 "⤳⋆ᵛ" => RedVals
-local infix:40 "⤳⋆ᶜ" => RedComs
-
-inductive RedVals : Val → Val → Prop where
-  | refl {a} : a ⤳⋆ᵛ a
-  | trans {a b c} : a ⤳ᵛ b → b ⤳⋆ᵛ c → a ⤳⋆ᵛ c
-
-inductive RedComs : Com → Com → Prop where
-  | refl {a} : a ⤳⋆ᶜ a
-  | trans {a b c} : a ⤳ᶜ b → b ⤳⋆ᶜ c → a ⤳⋆ᶜ c
-end
-
-infix:40 "⤳⋆ᵛ" => RedVals
-infix:40 "⤳⋆ᶜ" => RedComs
-
-def RedVals.once {a b} (r : a ⤳ᵛ b) : a ⤳⋆ᵛ b := .trans r .refl
-def RedComs.once {a b} (r : a ⤳ᶜ b) : a ⤳⋆ᶜ b := .trans r .refl
-
-theorem RedVals.trans' {a b c} (r₁ : a ⤳⋆ᵛ b) (r₂ : b ⤳⋆ᵛ c) : a ⤳⋆ᵛ c := by
-  induction r₁ generalizing c
-  case refl => exact r₂
-  case trans r₁ _ ih => exact .trans r₁ (ih r₂)
-
-theorem RedComs.trans' {a b c} (r₁ : a ⤳⋆ᶜ b) (r₂ : b ⤳⋆ᶜ c) : a ⤳⋆ᶜ c := by
-  induction r₁ generalizing c
-  case refl => exact r₂
-  case trans r₁ _ ih => exact .trans r₁ (ih r₂)
 
 /-*---------------------------------------
   Backward closure of nonconstructorness
@@ -310,16 +282,16 @@ theorem normalization :
   case snecom.app ihm ihv =>
     let ⟨_, rm, nem⟩ := ihm
     let ⟨_, rv, nfv⟩ := ihv
-    exact ⟨_, .trans' (.app₁ (nem.notLamRet) rm) (.app₂ nem rv), .app nem nfv⟩
+    exact ⟨_, Trans.trans (RedComs.app₁ (nem.notLamRet) rm) (RedComs.app₂ nem rv), .app nem nfv⟩
   case snecom.letin ihm ihn =>
     let ⟨_, rm, nem⟩ := ihm
     let ⟨_, rn, nfn⟩ := ihn
-    exact ⟨_, .trans' (.letin₁ (nem.notLamRet) rm) (.letin₂ nem rn), .letin nem nfn⟩
+    exact ⟨_, Trans.trans (RedComs.letin₁ (nem.notLamRet) rm) (RedComs.letin₂ nem rn), .letin nem nfn⟩
   case snecom.case snev _ _ ihm ihn =>
     let ⟨_, e⟩ := snev; subst e
     let ⟨_, rm, nfm⟩ := ihm
     let ⟨_, rn, nfn⟩ := ihn
-    exact ⟨_, .trans' (.case₁ rm) (.case₂ nfm rn), .case nfm nfn⟩
+    exact ⟨_, Trans.trans (RedComs.case₁ rm) (RedComs.case₂ nfm rn), .case nfm nfn⟩
   case snval.var => exact ⟨_, .refl, .var⟩
   case snval.unit => exact ⟨_, .refl, .unit⟩
   case snval.inl ih =>
