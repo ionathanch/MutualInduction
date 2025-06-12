@@ -20,6 +20,7 @@ def 𝒞 (B : ComType) (m : Com) : Prop :=
   match B with
   | F A => ∃ v, 𝒱 A v ∧ m = ret v
   | Arr A B => ∃ n, (∀ v, 𝒱 A v → ℰ B (n⦃v⦄)) ∧ m = lam n
+  | .Prod B₁ B₂ => ∃ n₁ n₂, ℰ B₁ n₁ ∧ ℰ B₂ n₂ ∧ m = prod n₁ n₂
 
 @[simp]
 def ℰ (B : ComType) (m : Com) := ∃ n, m ⇓ n ∧ 𝒞 B n
@@ -35,12 +36,15 @@ theorem 𝒱.inr {v A₁ A₂} (h : 𝒱 A₂ v) : 𝒱 (Sum A₁ A₂) (inr v) 
 theorem 𝒱.thunk {m B} (h : ℰ B m) : 𝒱 (U B) (thunk m) := by simp at *; assumption
 theorem 𝒞.ret {v A} (h : 𝒱 A v) : 𝒞 (F A) (ret v) := by simp; assumption
 theorem 𝒞.lam {n A B} (h : ∀ v, 𝒱 A v → ℰ B (n⦃v⦄)) : 𝒞 (Arr A B) (lam n) := by simp at *; assumption
+theorem 𝒞.prod {m n B₁ B₂} (hm : ℰ B₁ m) (hn : ℰ B₂ n) : 𝒞 (Prod B₁ B₂) (prod m n) := by simp at *; constructor <;> assumption
 
 -- Semantic computations are normal
 theorem 𝒞nf {B m} (h : m ∈ ⟦ B ⟧ᶜ) : nf m :=
   match (generalizing := true) B with
   | F _ | Arr _ _ =>
     by simp at h; let ⟨_, _, e⟩ := h; subst e; exact ⟨⟩
+  | .Prod _ _ =>
+    by simp at h; let ⟨_, _, _, _, e⟩ := h; subst e; exact ⟨⟩
 
 -- Semantic computations embed into semantic evaluations
 theorem 𝒞ℰ {B m} (h : m ∈ ⟦ B ⟧ᶜ) : m ∈ ⟦ B ⟧ᵉ :=
@@ -68,8 +72,8 @@ theorem semCtxtCons {Γ σ v A} (h : v ∈ ⟦ A ⟧ᵛ) (hσ : Γ ⊨ σ) : Γ 
   | _, _, .there mem => hσ mem
 
 -- Semantic typing of values and computations
-@[simp] def semVal Γ v A := ∀ σ, Γ ⊨ σ → v⦃σ⦄ ∈ ⟦ A ⟧ᵛ
-@[simp] def semCom Γ m B := ∀ σ, Γ ⊨ σ → m⦃σ⦄ ∈ ⟦ B ⟧ᵉ
+@[reducible, simp] def semVal Γ v A := ∀ σ, Γ ⊨ σ → v⦃σ⦄ ∈ ⟦ A ⟧ᵛ
+@[reducible, simp] def semCom Γ m B := ∀ σ, Γ ⊨ σ → m⦃σ⦄ ∈ ⟦ B ⟧ᵉ
 notation:40 Γ:41 "⊨" v:41 "∶" A:41 => semVal Γ v A
 notation:40 Γ:41 "⊨" m:41 "∶" B:41 => semCom Γ m B
 
@@ -122,6 +126,21 @@ theorem soundness {Γ} :
       let hn := ihn (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hn
       exact ℰbwd (.once .inr) hn
+  case prod m n _ _ _ _ ihm ihn =>
+    simp at ihm ihn
+    let ⟨_, ⟨rm, _⟩, hm⟩ := ihm σ hσ
+    let ⟨_, ⟨rn, _⟩, hn⟩ := ihn σ hσ
+    apply 𝒞ℰ; exact 𝒞.prod (𝒞bwd rm hm) (𝒞bwd rn hn)
+  case prjl ih =>
+    simp [-𝒞] at ih; unfold 𝒞 at ih
+    let ⟨_, ⟨rprod, nfprod⟩, n₁, n₂, hm, _, e⟩ := ih σ hσ; subst e
+    let r : prjl (_⦃σ⦄) ⇒⋆ n₁ := Trans.trans (Evals.prjl rprod) Eval.prodl
+    exact ℰbwd r hm
+  case prjr ih =>
+    simp [-𝒞] at ih; unfold 𝒞 at ih
+    let ⟨_, ⟨rprod, nfprod⟩, n₁, n₂, _, hn, e⟩ := ih σ hσ; subst e
+    let r : prjr (_⦃σ⦄) ⇒⋆ n₂ := Trans.trans (Evals.prjr rprod) Eval.prodr
+    exact ℰbwd r hn
 
 -- If a computation does not step, then it is in normal form
 theorem normal {m B} (nr : ∀ {n}, ¬ m ⇒ n) (h : ⬝ ⊢ m ∶ B) : nf m := by

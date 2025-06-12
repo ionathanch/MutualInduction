@@ -39,6 +39,8 @@ theorem SN_soundness :
   case snecom.app snem _ snm snv => exact .app (.ne snem) snm snv
   case snecom.letin snem _ snm snn => exact .letin (.ne snem) snm snn
   case snecom.case snv _ _ snm snn => exact .case snv snm snn
+  case snecom.prjl snem snm => exact .prjl (.ne snem) snm
+  case snecom.prjr snem snm => exact .prjr (.ne snem) snm
   case snval.var => constructor; intro _ r; cases r
   case snval.unit => constructor; intro _ r; cases r
   case snval.inl ih => exact .inl ih
@@ -46,6 +48,7 @@ theorem SN_soundness :
   case snval.thunk ih => exact .thunk ih
   case sncom.lam ih => exact .lam ih
   case sncom.ret ih => exact .ret ih
+  case sncom.prod ihm ihn => exact .prod ihm ihn
   case sncom.ne => assumption
   case sncom.red r ih => exact r.closure ih
   case srcom.thunk => constructor
@@ -55,6 +58,10 @@ theorem SN_soundness :
   case srcom.inr => constructor <;> assumption
   case srcom.app => constructor <;> assumption
   case srcom.letin => constructor <;> assumption
+  case srcom.prodl => constructor <;> assumption
+  case srcom.prodr => constructor <;> assumption
+  case srcom.prjl => constructor <;> assumption
+  case srcom.prjr => constructor <;> assumption
 
 /-*------------------------------------------
   Well typed terms are strongly normalizing

@@ -15,6 +15,8 @@ inductive SNeCom : Com → Prop where
   | app {m v} : SNeCom m → SNVal v → SNeCom (app m v)
   | letin {m n} : SNeCom m → SNCom n → SNeCom (letin m n)
   | case {v m n} : SNeVal v → SNCom m → SNCom n → SNeCom (case v m n)
+  | prjl {m} : SNeCom m → SNeCom (prjl m)
+  | prjr {m} : SNeCom m → SNeCom (prjr m)
 
 inductive SNVal : Val → Prop where
   | var {x} : SNVal (var x)
@@ -26,6 +28,7 @@ inductive SNVal : Val → Prop where
 inductive SNCom : Com → Prop where
   | lam {m} : SNCom m → SNCom (lam m)
   | ret {v} : SNVal v → SNCom (ret v)
+  | prod {m n} : SNCom m → SNCom n → SNCom (prod m n)
   | ne {m} : SNeCom m → SNCom m
   | red {m n : Com} : m ⤳ n → SNCom n → SNCom m
 
@@ -35,8 +38,12 @@ inductive SR : Com → Com → Prop where
   | ret {v m} : SNVal v → letin (ret v) m ⤳ m⦃v⦄
   | inl {v m n} : SNVal v → SNCom n → case (inl v) m n ⤳ m⦃v⦄
   | inr {v m n} : SNVal v → SNCom m → case (inr v) m n ⤳ n⦃v⦄
+  | prodl {m n} : SNCom n → prjl (prod m n) ⤳ m
+  | prodr {m n} : SNCom m → prjr (prod m n) ⤳ n
   | app {m n : Com} {v} : m ⤳ n → app m v ⤳ app n v
   | letin {m m' n : Com} : m ⤳ m' → letin m n ⤳ letin m' n
+  | prjl {m n} : m ⤳ n → prjl m ⤳ prjl n
+  | prjr {m n} : m ⤳ n → prjr m ⤳ prjr n
 end
 end
 infix:40 "⤳" => SR
@@ -69,6 +76,16 @@ theorem SRs.letin {m m' n : Com} (r : m ⤳⋆ m') : letin m n ⤳⋆ letin m' n
   induction r
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.letin r₁) r₂
+
+theorem SRs.prjl {m n : Com} (r : m ⤳⋆ n) : prjl m ⤳⋆ prjl n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prjl r₁) r₂
+
+theorem SRs.prjr {m n : Com} (r : m ⤳⋆ n) : prjr m ⤳⋆ prjr n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prjr r₁) r₂
 
 theorem SRs.red {m n : Com} (r : m ⤳⋆ n) (h : SNCom n) : SNCom m := by
   induction r
@@ -112,6 +129,14 @@ theorem antirenaming {ξ} :
     let ⟨_, e⟩ := snev; subst e
     cases v <;> try contradiction
     refine .case .var (ihm em) (ihn en)
+  case snecom.prjl ih m =>
+    cases m <;> try contradiction
+    injection e with e
+    exact .prjl (ih e)
+  case snecom.prjr ih m =>
+    cases m <;> try contradiction
+    injection e with e
+    exact .prjr (ih e)
   case snval.var ih v =>
     cases v <;> try contradiction
     exact .var
@@ -136,17 +161,21 @@ theorem antirenaming {ξ} :
     cases m <;> try contradiction
     injection e with e
     exact .ret (ih e)
+  case sncom.prod ihm ihn m =>
+    cases m <;> try contradiction
+    injection e with em en
+    exact .prod (ihm em) (ihn en)
   case sncom.ne ih _ => exact .ne (ih e)
   case sncom.red ihr ihm _ =>
     let ⟨_, e, r⟩ := ihr e
-    exact .red r (ihm (Eq.symm e))
+    exact .red r (ihm (.symm e))
   case srcom.thunk ih m =>
     cases m <;> try contradiction
     injection e with e
     case force v =>
     cases v <;> try contradiction
     injection e with e
-    exact ⟨_, Eq.symm e, .thunk⟩
+    exact ⟨_, .symm e, .thunk⟩
   case srcom.lam ih m =>
     cases m <;> try contradiction
     injection e with em ev
@@ -189,6 +218,30 @@ theorem antirenaming {ξ} :
     injection e with em ev
     let ⟨_, em, r⟩ := ihm em; subst em ev
     exact ⟨.letin _ _, rfl, .letin r⟩
+  case srcom.prodl ihm m =>
+    cases m <;> try contradiction
+    injection e with e
+    rename Com => m
+    cases m <;> try contradiction
+    injection e with em en
+    exact ⟨_, .symm em, .prodl (ihm en)⟩
+  case srcom.prodr ihm m =>
+    cases m <;> try contradiction
+    injection e with e
+    rename Com => m
+    cases m <;> try contradiction
+    injection e with em en
+    exact ⟨_, .symm en, .prodr (ihm em)⟩
+  case srcom.prjl ihm m =>
+    cases m <;> try contradiction
+    injection e with e
+    let ⟨_, e, r⟩ := ihm e; subst e
+    exact ⟨.prjl _, rfl, .prjl r⟩
+  case srcom.prjr ihm m =>
+    cases m <;> try contradiction
+    injection e with e
+    let ⟨_, e, r⟩ := ihm e; subst e
+    exact ⟨.prjr _, rfl, .prjr r⟩
 
 def SNCom.antirenaming {ξ m} := @(@_root_.antirenaming ξ).right.right.left m
 

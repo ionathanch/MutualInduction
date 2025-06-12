@@ -21,6 +21,7 @@ inductive ValType : Type where
 inductive ComType : Type where
   | F : ValType → ComType
   | Arr : ValType → ComType → ComType
+  | Prod : ComType → ComType → ComType
 end
 open ValType ComType
 
@@ -43,6 +44,9 @@ inductive Com : Type where
   | ret : Val → Com
   | letin : Com → Com → Com
   | case : Val → Com → Com → Com
+  | prod : Com → Com → Com
+  | prjl : Com → Com
+  | prjr : Com → Com
 end
 open Val Com
 
@@ -50,6 +54,9 @@ theorem appCong {m m' v v'} : m = m' → v = v' → app m v = app m' v'
   | rfl, rfl => rfl
 
 theorem letinCong {m m' n n'} : m = m' → n = n' → letin m n = letin m' n'
+  | rfl, rfl => rfl
+
+theorem prodCong {m m' n n'} : m = m' → n = n' → prod m n = prod m' n'
   | rfl, rfl => rfl
 
 /-*------------------
@@ -103,6 +110,9 @@ def renameCom (ξ : Nat → Nat) : Com → Com
   | ret v => ret (renameVal ξ v)
   | letin m n => letin (renameCom ξ m) (renameCom (lift ξ) n)
   | case v m n => case (renameVal ξ v) (renameCom (lift ξ) m) (renameCom (lift ξ) n)
+  | prod m n => prod (renameCom ξ m) (renameCom ξ n)
+  | prjl m => prjl (renameCom ξ m)
+  | prjr m => prjr (renameCom ξ m)
 end
 
 -- Renaming extensionality
@@ -222,6 +232,9 @@ def substCom (σ : Nat → Val) : Com → Com
   | ret v => ret (substVal σ v)
   | letin m n => letin (substCom σ m) (substCom (⇑ σ) n)
   | case v m n => case (substVal σ v) (substCom (⇑ σ) m) (substCom (⇑ σ) n)
+  | prod m n => prod (substCom σ m) (substCom σ n)
+  | prjl m => prjl (substCom σ m)
+  | prjr m => prjr (substCom σ m)
 end
 notation:50 v "⦃" σ "⦄" => substVal σ v
 notation:50 m "⦃" σ "⦄" => substCom σ m

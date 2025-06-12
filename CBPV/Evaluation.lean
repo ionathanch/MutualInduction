@@ -16,6 +16,8 @@ inductive Eval : Com → Com → Prop where
   | ret {v m} : letin (ret v) m ⇒ m⦃v⦄
   | inl {v m n} : case (inl v) m n ⇒ m⦃v⦄
   | inr {v m n} : case (inr v) m n ⇒ n⦃v⦄
+  | prodl {m n} : prjl (prod m n) ⇒ m
+  | prodr {m n} : prjr (prod m n) ⇒ n
   | app {m m' v} :
     m ⇒ m' →
     ------------------
@@ -24,6 +26,14 @@ inductive Eval : Com → Com → Prop where
     m ⇒ m' →
     ----------------------
     letin m n ⇒ letin m' n
+  | prjl {m m'} :
+    m ⇒ m' →
+    ----------------
+    prjl m ⇒ prjl m'
+  | prjr {m m'} :
+    m ⇒ m' →
+    ----------------
+    prjr m ⇒ prjr m'
 end
 infix:40 "⇒" => Eval
 
@@ -31,7 +41,8 @@ infix:40 "⇒" => Eval
 theorem evalDet {m n₁ n₂} (r₁ : m ⇒ n₁) (r₂ : m ⇒ n₂) : n₁ = n₂ := by
   induction r₁ generalizing n₂
   all_goals cases r₂; try rfl
-  all_goals apply_rules [appCong, letinCong]
+  case prjl.prjl ih _ r | prjr.prjr ih _ r => rw [ih r]
+  all_goals try apply_rules [appCong, letinCong, prodCong]
   all_goals rename _ ⇒ _ => r; cases r
 
 /-*----------------------
@@ -51,6 +62,16 @@ theorem Evals.let {m m' n} (r : m ⇒⋆ m') : letin m n ⇒⋆ letin m' n := by
   case refl => exact .refl
   case trans r _ ih => exact .trans (.letin r) ih
 
+theorem Evals.prjl {m m'} (r : m ⇒⋆ m') : prjl m ⇒⋆ prjl m' := by
+  induction r
+  case refl => exact .refl
+  case trans r _ ih => exact .trans (.prjl r) ih
+
+theorem Evals.prjr {m m'} (r : m ⇒⋆ m') : prjr m ⇒⋆ prjr m' := by
+  induction r
+  case refl => exact .refl
+  case trans r _ ih => exact .trans (.prjr r) ih
+
 -- Multi-step reduction is confluent trivially by determinism
 theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) : ∃ m', n₁ ⇒⋆ m' ∧ n₂ ⇒⋆ m' := by
   induction r₁ generalizing n₂
@@ -66,8 +87,8 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
 
 @[simp]
 def nf : Com → Prop
-  | lam _ | ret _ => True
-  | force _ | .app _ _ | letin _ _ | case _ _ _ => False
+  | lam _ | ret _ | prod _ _ => True
+  | force _ | .app _ _ | letin _ _ | case _ _ _ | prjl _ | prjr _ => False
 
 theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *

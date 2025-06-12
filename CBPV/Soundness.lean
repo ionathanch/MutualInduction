@@ -66,8 +66,7 @@ theorem soundness {Γ} :
     let ⟨_, hB', pm⟩ := ih (v +: σ) (semCtxtCons hA pv hσ)
     rw [𝒞.det hB' hB] at pm
     let r : app ((lam m)⦃σ⦄) v ⤳ m⦃v +: σ⦄ := by
-      calc
-        app ((lam m)⦃σ⦄) v
+      calc app ((lam m)⦃σ⦄) v
         _ = app (lam (m⦃⇑ σ⦄)) v := rfl
         _ ⤳ m⦃⇑ σ⦄⦃v⦄            := .lam (hA.snVal pv)
         _ = (m⦃v +: σ⦄)          := by rw [← substUnion]
@@ -92,8 +91,7 @@ theorem soundness {Γ} :
     | .inr ⟨v, r, pv⟩ =>
       let ⟨_, hB, pn⟩ := ihn (v +: σ) (semCtxtCons hA pv hσ)
       let r' : (letin m n)⦃σ⦄ ⤳⋆ n⦃v +: σ⦄ := by
-        calc
-          (letin m n)⦃σ⦄
+        calc (letin m n)⦃σ⦄
           _ = letin (m⦃σ⦄) (n⦃⇑ σ⦄)    := rfl
           _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r
           _ ⤳ n⦃⇑ σ⦄⦃v⦄                := .ret (hA.snVal pv)
@@ -113,8 +111,7 @@ theorem soundness {Γ} :
       let ⟨R, hB, rm⟩ := ihm (w +: σ) (semCtxtCons hA₁ pv hσ)
       simp only [substCom]
       let r : (case v m n)⦃σ⦄ ⤳ m⦃w +: σ⦄ := by
-        calc
-          (case v m n)⦃σ⦄
+        calc (case v m n)⦃σ⦄
           _ = (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
           _ ⤳ m⦃⇑ σ⦄⦃w⦄                        := .inl snv snn
           _ = (m⦃w +: σ⦄)                      := by rw [← substUnion]
@@ -123,9 +120,34 @@ theorem soundness {Γ} :
       let snv := hA₂.snVal qv
       let ⟨R, hB, rm⟩ := ihn (w +: σ) (semCtxtCons hA₂ qv hσ)
       let r' : (case v m n)⦃σ⦄ ⤳ n⦃w +: σ⦄ := by
-        calc
-          (case v m n)⦃σ⦄
+        calc (case v m n)⦃σ⦄
           _ = case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
           _ ⤳ n⦃⇑ σ⦄⦃w⦄                      := .inr snv snm
           _ = (n⦃w +: σ⦄)                    := by rw [← substUnion]
       exact ⟨R, hB, hB.closure (.once r') rm⟩
+  case prod ihm ihn =>
+    let ⟨_, hB₁, pm⟩ := ihm σ hσ
+    let ⟨_, hB₂, pn⟩ := ihn σ hσ
+    exact ⟨_, .Prod hB₁ hB₂, .inr ⟨_, _, .refl, pm, pn⟩⟩
+  case prjl m _ _ _ ihm =>
+    let ⟨_, hProd, pm⟩ := ihm σ hσ
+    cases hProd with | Prod hB₁ hB₂ =>
+    match pm with
+    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₁, hB₁.closure (.prjl r) (hB₁.sneCom (.prjl sne))⟩
+    | .inr ⟨n₁, n₂, r, pn₁, pn₂⟩ =>
+      let r' : prjl (m⦃σ⦄) ⤳⋆ n₁ := by
+        calc prjl (m⦃σ⦄)
+          _ ⤳⋆ prjl (prod n₁ n₂) := .prjl r
+          _ ⤳⋆ n₁                := .once (.prodl (hB₂.snCom pn₂))
+      refine ⟨_, hB₁, hB₁.closure r' pn₁⟩
+  case prjr m _ _ _ ihm =>
+    let ⟨_, hProd, pm⟩ := ihm σ hσ
+    cases hProd with | Prod hB₁ hB₂ =>
+    match pm with
+    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₂, hB₂.closure (.prjr r) (hB₂.sneCom (.prjr sne))⟩
+    | .inr ⟨n₁, n₂, r, pn₁, pn₂⟩ =>
+      let r' : prjr (m⦃σ⦄) ⤳⋆ n₂ := by
+        calc prjr (m⦃σ⦄)
+          _ ⤳⋆ prjr (prod n₁ n₂) := .prjr r
+          _ ⤳⋆ n₂                := .once (.prodr (hB₁.snCom pn₁))
+      refine ⟨_, hB₂, hB₂.closure r' pn₂⟩

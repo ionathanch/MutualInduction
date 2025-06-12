@@ -24,6 +24,8 @@ inductive StepCom : Com → Com → Prop where
   | ζ {v m} : letin (ret v) m ⤳ᶜ m⦃v⦄
   | ιl {v m n} : case (inl v) m n ⤳ᶜ m⦃v⦄
   | ιr {v m n} : case (inr v) m n ⤳ᶜ n⦃v⦄
+  | πl {m n} : prjl (prod m n) ⤳ᶜ m
+  | πr {m n} : prjr (prod m n) ⤳ᶜ n
   | force {v w} : v ⤳ᵛ w → force v ⤳ᶜ force w
   | lam {m n} : m ⤳ᶜ n → lam m ⤳ᶜ lam n
   | app₁ {m n v} :
@@ -55,6 +57,22 @@ inductive StepCom : Com → Com → Prop where
     n ⤳ᶜ n' →
     --------------------------
     case v m n ⤳ᶜ case v m n'
+  | prod₁ {m m' n} :
+    m ⤳ᶜ m' →
+    ----------------------
+    prod m n ⤳ᶜ prod m' n
+  | prod₂ {m n n'} :
+    n ⤳ᶜ n' →
+    ----------------------
+    prod m n ⤳ᶜ prod m n'
+  | prjl {m n} :
+    m ⤳ᶜ n →
+    -----------------
+    prjl m ⤳ᶜ prjl n
+  | prjr {m n} :
+    m ⤳ᶜ n →
+    -----------------
+    prjr m ⤳ᶜ prjr n
 end
 end
 
@@ -173,6 +191,29 @@ theorem StepComs.case₂ {v m n n'} (r : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ 
 theorem StepComs.case {v w m m' n n'} (rv : v ⤳⋆ᵛ w) (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : case v m n ⤳⋆ᶜ case w m' n' :=
   Trans.trans (StepComs.case₀ rv) (Trans.trans (StepComs.case₁ rm) (StepComs.case₂ rn))
 
+theorem StepComs.prod₁ {m m' n} (r : m ⤳⋆ᶜ m') : prod m n ⤳⋆ᶜ prod m' n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prod₁ r₁) r₂
+
+theorem StepComs.prod₂ {m n n'} (r : n ⤳⋆ᶜ n') : prod m n ⤳⋆ᶜ prod m n' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prod₂ r₁) r₂
+
+theorem StepComs.prod {m m' n n'} (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : prod m n ⤳⋆ᶜ prod m' n' :=
+  Trans.trans (StepComs.prod₁ rm) (StepComs.prod₂ rn)
+
+theorem StepComs.prjl {m n} (r : m ⤳⋆ᶜ n) : prjl m ⤳⋆ᶜ prjl n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prjl r₁) r₂
+
+theorem StepComs.prjr {m n} (r : m ⤳⋆ᶜ n) : prjr m ⤳⋆ᶜ prjr n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prjr r₁) r₂
+
 /-*--------------------------------------------
   Substitution lemmas on multi-step reduction
 --------------------------------------------*-/
@@ -218,6 +259,9 @@ theorem stepReplace {σ τ} (h : ∀ x, σ x ⤳⋆ᵛ τ x):
   case ret ih => exact .ret (ih h)
   case letin ihm ihn => exact .letin (ihm h) (ihn (.lift h))
   case case ihv ihm ihn => exact .case (ihv h) (ihm (.lift h)) (ihn (.lift h))
+  case prod ihm ihn => exact .prod (ihm h) (ihn h)
+  case prjl ih => exact .prjl (ih h)
+  case prjr ih => exact .prjr (ih h)
 
 theorem StepVal.replace {m : Com} {v w : Val} (r : v ⤳ᵛ w) : m⦃v⦄ ⤳⋆ᶜ m⦃w⦄ := by
   refine @(stepReplace ?ext).right m

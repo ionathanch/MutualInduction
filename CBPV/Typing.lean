@@ -56,6 +56,19 @@ inductive ComWt : Ctxt → Com → ComType → Prop where
     Γ ∷ A₂ ⊢ n ∶ B →
     ------------------
     Γ ⊢ case v m n ∶ B
+  | prod {Γ m n} {B₁ B₂: ComType} :
+    Γ ⊢ m ∶ B₁ →
+    Γ ⊢ n ∶ B₂ →
+    -------------------------
+    Γ ⊢ prod m n ∶ Prod B₁ B₂
+  | prjl {Γ m} {B₁ B₂ : ComType} :
+    Γ ⊢ m ∶ Prod B₁ B₂ →
+    --------------------
+    Γ ⊢ prjl m ∶ B₁
+  | prjr {Γ m} {B₁ B₂ : ComType} :
+    Γ ⊢ m ∶ Prod B₁ B₂ →
+    --------------------
+    Γ ⊢ prjr m ∶ B₂
 end
 end
 
@@ -71,17 +84,7 @@ theorem wtRename {ξ} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) :
   (∀ {m} {B : ComType}, Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B) := by
   refine ⟨λ h ↦ ?wtv, λ h ↦ ?wtm⟩
   mutual_induction h, h generalizing ξ Δ
-  case wtv.var mem => exact .var (hξ _ _ mem)
-  case wtv.unit => exact .unit
-  case wtv.inl ih => exact .inl (ih hξ)
-  case wtv.inr ih => exact .inr (ih hξ)
-  case wtv.thunk ih => exact .thunk (ih hξ)
-  case wtm.force ih => exact .force (ih hξ)
-  case wtm.lam ih => exact .lam (ih (wRenameLift hξ))
-  case wtm.app ihm ihv => exact .app (ihm hξ) (ihv hξ)
-  case wtm.ret ih => exact .ret (ih hξ)
-  case wtm.letin ihm ihn => exact .letin (ihm hξ) (ihn (wRenameLift hξ))
-  case wtm.case ihv ihm ihn => exact .case (ihv hξ) (ihm (wRenameLift hξ)) (ihn (wRenameLift hξ))
+  all_goals constructor <;> apply_rules [wRenameLift]
 
 theorem wtRenameCom {ξ} {Γ Δ : Ctxt} {m} {B : ComType} :
   Δ ⊢ ξ ∶ Γ → Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B :=

@@ -3,13 +3,13 @@ import CBPV.NormalInd
 open Val Com
 
 /-*-----------------------------------------
-  Not a lambda/return/inl/inr
+  Not a lambda/return/product/inl/inr
   (to restrict reduction in head position)
 -----------------------------------------*-/
 
 @[simp, reducible]
-def NotLamRet : Com → Prop
-  | lam _ | ret _ => False
+def NotLamRetProd : Com → Prop
+  | lam _ | ret _ | prod _ _ => False
   | _ => True
 
 @[simp, reducible]
@@ -29,6 +29,8 @@ inductive NeCom : Com → Prop where
   | app {m v} : NeCom m → NfVal v → NeCom (app m v)
   | letin {m n} : NeCom m → NfCom n → NeCom (letin m n)
   | case {x m n} : NfCom m → NfCom n → NeCom (case (var x) m n)
+  | prjl {m} : NeCom m → NeCom (prjl m)
+  | prjr {m} : NeCom m → NeCom (prjr m)
 
 inductive NfVal : Val → Prop where
   | var {x} : NfVal (var x)
@@ -40,10 +42,11 @@ inductive NfVal : Val → Prop where
 inductive NfCom : Com → Prop where
   | lam {m} : NfCom m → NfCom (lam m)
   | ret {v} : NfVal v → NfCom (ret v)
+  | prod {m n} : NfCom m → NfCom n → NfCom (prod m n)
   | ne {m} : NeCom m → NfCom m
 end
 
-theorem NeCom.notLamRet {m} (nem : NeCom m) : NotLamRet m := by
+theorem NeCom.NotLamRetProd {m} (nem : NeCom m) : NotLamRetProd m := by
   cases nem <;> simp
 
 /-*-----------------------------
@@ -67,15 +70,21 @@ inductive RedCom : Com → Com → Prop where
   | ζ {v m} : letin (ret v) m ⤳ᶜ m⦃v⦄
   | ιl {v m n} : case (inl v) m n ⤳ᶜ m⦃v⦄
   | ιr {v m n} : case (inr v) m n ⤳ᶜ n⦃v⦄
+  | πl {m n} : prjl (prod m n) ⤳ᶜ m
+  | πr {m n} : prjr (prod m n) ⤳ᶜ n
   | lam {m n} : m ⤳ᶜ n → lam m ⤳ᶜ lam n
-  | app₁ {m n v} : NotLamRet m → m ⤳ᶜ n → app m v ⤳ᶜ app n v
+  | app₁ {m n v} : NotLamRetProd m → m ⤳ᶜ n → app m v ⤳ᶜ app n v
   | app₂ {m v w} : NeCom m → v ⤳ᵛ w → app m v ⤳ᶜ app m w
   | ret {v w} : v ⤳ᵛ w → ret v ⤳ᶜ ret w
-  | letin₁ {m m' n} : NotLamRet m → m ⤳ᶜ m' → letin m n ⤳ᶜ letin m' n
+  | prod₁ {m m' n} : m ⤳ᶜ m' → prod m n ⤳ᶜ prod m' n
+  | prod₂ {m n n'} : NfCom m → n ⤳ᶜ n' → prod m n ⤳ᶜ prod m n'
+  | letin₁ {m m' n} : NotLamRetProd m → m ⤳ᶜ m' → letin m n ⤳ᶜ letin m' n
   | letin₂ {m n n'} : NeCom m → n ⤳ᶜ n' → letin m n ⤳ᶜ letin m n'
   | case₀ {v w m n} : NotInlr v → v ⤳ᵛ w → case v m n ⤳ᶜ case w m n
   | case₁ {x m m' n} : m ⤳ᶜ m' → case (var x) m n ⤳ᶜ case (var x) m' n
   | case₂ {x m n n'} : NfCom m → n ⤳ᶜ n' → case (var x) m n ⤳ᶜ case (var x) m n'
+  | prjl {m m'} : NotLamRetProd m → m ⤳ᶜ m' → prjl m ⤳ᶜ prjl m'
+  | prjr {m m'} : NotLamRetProd m → m ⤳ᶜ m' → prjr m ⤳ᶜ prjr m'
 end
 end
 
@@ -119,6 +128,18 @@ theorem normality :
     case case₀ r => cases r
     case case₁ r => exact ihm r
     case case₂ r => exact ihn r
+  case prjl neprod _ _ =>
+    cases r
+    case πl => cases neprod
+    case prjl ih _ _ r => exact ih r
+  case prjr neprod _ _ =>
+    cases r
+    case πr => cases neprod
+    case prjr ih _ _ r => exact ih r
+  case prod ihm ihn _ =>
+    cases r
+    case prod₁ r => exact ihm r
+    case prod₂ r => exact ihn r
 
 def NeCom.normality {m n} := @_root_.normality.left m n
 def NfVal.normality {v w} := @_root_.normality.right.left v w
@@ -143,6 +164,8 @@ theorem determinism :
     case letin₂ neret _ => cases neret
   case ιl => cases r₂; rfl; contradiction
   case ιr => cases r₂; rfl; contradiction
+  case πl => cases r₂; rfl; contradiction
+  case πr => cases r₂; rfl; contradiction
   case lam ih _ => cases r₂ with | lam r => rw [ih r]
   case app₁ ih _ =>
     cases r₂; contradiction
@@ -153,6 +176,14 @@ theorem determinism :
     case app₁ nem _ _ _ r => cases nem.normality r
     case app₂ r => rw [ih r]
   case ret ih _ => cases r₂ with | ret r => rw [ih r]
+  case prod₁ ih _ =>
+    cases r₂
+    case prod₁ r => rw [ih r]
+    case prod₂ r _ nfm _ => cases nfm.normality r
+  case prod₂ ih _ =>
+    cases r₂
+    case prod₁ nfm _ _ r => cases nfm.normality r
+    case prod₂ r => rw [ih r]
   case letin₁ ih _ =>
     cases r₂; contradiction
     case letin₁ r => rw [ih r]
@@ -176,21 +207,27 @@ theorem determinism :
     case case₀ r => cases r
     case case₁ nfm _ _ r => cases nfm.normality r
     case case₂ r => rw [ih r]
+  case prjl ih _ =>
+    cases r₂; contradiction
+    case prjl r => rw [ih r]
+  case prjr ih _ =>
+    cases r₂; contradiction
+    case prjr r => rw [ih r]
 
 /-*---------------------------------------
   Backward closure of nonconstructorness
 ---------------------------------------*-/
 
-theorem RedCom.notLamRet {m n} (r : m ⤳ᶜ n) (nl : NotLamRet n) : NotLamRet m := by
+theorem RedCom.notLamRetProd {m n} (r : m ⤳ᶜ n) (nl : NotLamRetProd n) : NotLamRetProd m := by
   mutual_induction r generalizing nl <;> simp at *
 
 theorem RedVal.notInlr {v w} (r : v ⤳ᵛ w) (ni : NotInlr w) : NotInlr v := by
   mutual_induction r generalizing ni <;> simp at *
 
-theorem RedComs.notLamRet {m n} (r : m ⤳⋆ᶜ n) (nl : NotLamRet n) : NotLamRet m := by
+theorem RedComs.notLamRetProd {m n} (r : m ⤳⋆ᶜ n) (nl : NotLamRetProd n) : NotLamRetProd m := by
   induction r
   case refl => exact nl
-  case trans r _ ih => exact r.notLamRet (ih nl)
+  case trans r _ ih => exact r.notLamRetProd (ih nl)
 
 theorem RedVals.notInlr {v w} (r : v ⤳⋆ᵛ w) (ni : NotInlr w) : NotInlr v := by
   induction r
@@ -226,20 +263,20 @@ theorem RedComs.lam {m n} (r : m ⤳⋆ᶜ n) : lam m ⤳⋆ᶜ lam n := by
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.lam r₁) r₂
 
-theorem RedComs.app₁ {m n v} (nl : NotLamRet n) (r : m ⤳⋆ᶜ n) : app m v ⤳⋆ᶜ app n v := by
+theorem RedComs.app₁ {m n v} (nl : NotLamRetProd n) (r : m ⤳⋆ᶜ n) : app m v ⤳⋆ᶜ app n v := by
   induction r
   case refl => exact .refl
-  case trans r₁ r₂ ih => exact .trans (.app₁ (RedComs.notLamRet (.trans r₁ r₂) nl) r₁) (ih nl)
+  case trans r₁ r₂ ih => exact .trans (.app₁ (RedComs.notLamRetProd (.trans r₁ r₂) nl) r₁) (ih nl)
 
 theorem RedComs.app₂ {m v w} (nem : NeCom m) (r : v ⤳⋆ᵛ w) : app m v ⤳⋆ᶜ app m w := by
   induction r
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.app₂ nem r₁) r₂
 
-theorem RedComs.letin₁ {m m' n} (nr : NotLamRet m') (r : m ⤳⋆ᶜ m') : letin m n ⤳⋆ᶜ letin m' n := by
+theorem RedComs.letin₁ {m m' n} (nr : NotLamRetProd m') (r : m ⤳⋆ᶜ m') : letin m n ⤳⋆ᶜ letin m' n := by
   induction r
   case refl => exact .refl
-  case trans r₁ r₂ ih => exact .trans (.letin₁ (RedComs.notLamRet (.trans r₁ r₂) nr) r₁) (ih nr)
+  case trans r₁ r₂ ih => exact .trans (.letin₁ (RedComs.notLamRetProd (.trans r₁ r₂) nr) r₁) (ih nr)
 
 theorem RedComs.letin₂ {m n n'} (nem : NeCom m) (r : n ⤳⋆ᶜ n') : letin m n ⤳⋆ᶜ letin m n' := by
   induction r
@@ -261,12 +298,35 @@ theorem RedComs.case₂ {x m n n'} (nem : NfCom m) (r : n ⤳⋆ᶜ n') : case (
   case refl => exact .refl
   case trans r₁ _ r₂ => exact .trans (.case₂ nem r₁) r₂
 
+theorem RedComs.prod₁ {m m' n} (r : m ⤳⋆ᶜ m') : prod m n ⤳⋆ᶜ prod m' n := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prod₁ r₁) r₂
+
+theorem RedComs.prod₂ {m n n'} (nfm : NfCom m) (r : n ⤳⋆ᶜ n') : prod m n ⤳⋆ᶜ prod m n' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ _ r₂ => exact .trans (.prod₂ nfm r₁) r₂
+
+theorem RedComs.prod {m m' n n'} (nfm : NfCom m') (rm : m ⤳⋆ᶜ m') (rn : n ⤳⋆ᶜ n') : prod m n ⤳⋆ᶜ prod m' n' :=
+  Trans.trans (RedComs.prod₁ rm) (RedComs.prod₂ nfm rn)
+
+theorem RedComs.prjl {m m'} (np : NotLamRetProd m') (r : m ⤳⋆ᶜ m') : prjl m ⤳⋆ᶜ prjl m' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ r₂ ih => exact .trans (.prjl (RedComs.notLamRetProd (.trans r₁ r₂) np) r₁) (ih np)
+
+theorem RedComs.prjr {m m'} (np : NotLamRetProd m') (r : m ⤳⋆ᶜ m') : prjr m ⤳⋆ᶜ prjr m' := by
+  induction r
+  case refl => exact .refl
+  case trans r₁ r₂ ih => refine .trans (.prjr (RedComs.notLamRetProd (.trans r₁ r₂) np) r₁) (ih np)
+
 /-*----------------------------------------
   Leftmost outermost reduction normalizes
   strongly normal terms to normal forms
 ----------------------------------------*-/
 
-theorem SR.notLamRet {m n} (r : m ⤳ n) : NotLamRet m := by
+theorem SR.NotLamRetProd {m n} (r : m ⤳ n) : NotLamRetProd m := by
   mutual_induction r <;> simp
 
 theorem normalization :
@@ -282,16 +342,22 @@ theorem normalization :
   case snecom.app ihm ihv =>
     let ⟨_, rm, nem⟩ := ihm
     let ⟨_, rv, nfv⟩ := ihv
-    exact ⟨_, Trans.trans (RedComs.app₁ (nem.notLamRet) rm) (RedComs.app₂ nem rv), .app nem nfv⟩
+    exact ⟨_, Trans.trans (RedComs.app₁ (nem.NotLamRetProd) rm) (RedComs.app₂ nem rv), .app nem nfv⟩
   case snecom.letin ihm ihn =>
     let ⟨_, rm, nem⟩ := ihm
     let ⟨_, rn, nfn⟩ := ihn
-    exact ⟨_, Trans.trans (RedComs.letin₁ (nem.notLamRet) rm) (RedComs.letin₂ nem rn), .letin nem nfn⟩
+    exact ⟨_, Trans.trans (RedComs.letin₁ (nem.NotLamRetProd) rm) (RedComs.letin₂ nem rn), .letin nem nfn⟩
   case snecom.case snev _ _ ihm ihn =>
     let ⟨_, e⟩ := snev; subst e
     let ⟨_, rm, nfm⟩ := ihm
     let ⟨_, rn, nfn⟩ := ihn
     exact ⟨_, Trans.trans (RedComs.case₁ rm) (RedComs.case₂ nfm rn), .case nfm nfn⟩
+  case snecom.prjl ih =>
+    let ⟨_, rm, nem⟩ := ih
+    exact ⟨_, .prjl (nem.NotLamRetProd) rm, .prjl nem⟩
+  case snecom.prjr ih =>
+    let ⟨_, rm, nem⟩ := ih
+    exact ⟨_, .prjr (nem.NotLamRetProd) rm, .prjr nem⟩
   case snval.var => exact ⟨_, .refl, .var⟩
   case snval.unit => exact ⟨_, .refl, .unit⟩
   case snval.inl ih =>
@@ -309,6 +375,10 @@ theorem normalization :
   case sncom.ret ih =>
     let ⟨_, r, nfv⟩ := ih
     exact ⟨_, .ret r, .ret nfv⟩
+  case sncom.prod ihm ihn =>
+    let ⟨_, rm, nfm⟩ := ihm
+    let ⟨_, rn, nfn⟩ := ihn
+    exact ⟨_, .prod nfm rm rn, .prod nfm nfn⟩
   case sncom.ne ih =>
     let ⟨_, r, nfm⟩ := ih
     exact ⟨_, r, .ne nfm⟩
@@ -320,5 +390,9 @@ theorem normalization :
   case srcom.ret => exact .ζ
   case srcom.inl => exact .ιl
   case srcom.inr => exact .ιr
-  case srcom.app sr r => exact .app₁ sr.notLamRet r
-  case srcom.letin sr r => exact .letin₁ sr.notLamRet r
+  case srcom.app sr r => exact .app₁ sr.NotLamRetProd r
+  case srcom.letin sr r => exact .letin₁ sr.NotLamRetProd r
+  case srcom.prodl => exact .πl
+  case srcom.prodr => exact .πr
+  case srcom.prjl sr r => exact .prjl sr.NotLamRetProd r
+  case srcom.prjr sr r => exact .prjr sr.NotLamRetProd r

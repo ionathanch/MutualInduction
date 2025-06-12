@@ -36,6 +36,11 @@ inductive 𝒞 : ComType → (Com → Prop) → Prop where
     ⟦ B ⟧ᶜ ↘ Q →
     ---------------------------------------------
     ⟦ Arr A B ⟧ᶜ ↘ (λ m ↦ ∀ v, P v → Q (app m v))
+  | Prod {B₁ B₂ P Q} :
+    ⟦ B₁ ⟧ᶜ ↘ P →
+    ⟦ B₂ ⟧ᶜ ↘ Q →
+    ----------------------------------------------------------------------------------------------
+    ⟦ Prod B₁ B₂ ⟧ᶜ ↘ (λ m ↦ (∃ n, m ⤳⋆ n ∧ SNeCom n) ∨ (∃ n₁ n₂, m ⤳⋆ prod n₁ n₂ ∧ P n₁ ∧ Q n₂))
 end
 end
 
@@ -58,6 +63,10 @@ theorem interp :
     let ⟨_, hA⟩ := ihA
     let ⟨_, hB⟩ := ihB
     exact ⟨_, .Arr hA hB⟩
+  case Prod ihA ihB =>
+    let ⟨_, hA⟩ := ihA
+    let ⟨_, hB⟩ := ihB
+    exact ⟨_, .Prod hA hB⟩
 
 def ValType.interp : ∀ A, ∃ P, ⟦ A ⟧ᵛ ↘ P := _root_.interp.left
 def ComType.interp : ∀ B, ∃ P, ⟦ B ⟧ᶜ ↘ P := _root_.interp.right
@@ -84,6 +93,8 @@ theorem determinism :
     intro h; cases h with | F hA => rw [ih hA]
   case Arr ihA ihB =>
     intro h; cases h with | Arr hA hB => rw [ihA hA, ihB hB]
+  case Prod ihA ihB =>
+    intro h; cases h with | Prod hA hB => rw [ihA hA, ihB hB]
 
 def 𝒱.det : ∀ {A P Q}, ⟦ A ⟧ᵛ ↘ P → ⟦ A ⟧ᵛ ↘ Q → P = Q := determinism.left
 def 𝒞.det : ∀ {B P Q}, ⟦ B ⟧ᶜ ↘ P → ⟦ B ⟧ᶜ ↘ Q → P = Q := determinism.right
@@ -93,9 +104,13 @@ theorem 𝒞.closure {B P} {m n : Com} (h : ⟦ B ⟧ᶜ ↘ P) (r : m ⤳⋆ n)
   all_goals intro p
   case F =>
     match p with
-    | .inl ⟨_, r', sne⟩ => exact Or.inl ⟨_, .trans' r r', sne⟩
-    | .inr ⟨_, r', pv⟩  => exact Or.inr ⟨_, .trans' r r', pv⟩
+    | .inl ⟨_, r', sne⟩ => exact .inl ⟨_, .trans' r r', sne⟩
+    | .inr ⟨_, r', pv⟩  => exact .inr ⟨_, .trans' r r', pv⟩
   case Arr hA _ ih => exact λ v pv ↦ ih (.app r) (p v pv)
+  case Prod hA hB _ _ =>
+    match p with
+    | .inl ⟨_, r', sne⟩ => exact .inl ⟨_, .trans' r r', sne⟩
+    | .inr ⟨_, _, r', pm, pn⟩ => exact .inr ⟨_, _, .trans' r r', pm, pn⟩
 
 theorem adequacy :
   (∀ {A P} {v : Val}, ⟦ A ⟧ᵛ ↘ P → (SNeVal v → P v) ∧ (P v → SNVal v)) ∧
@@ -128,6 +143,13 @@ theorem adequacy :
       exact λ v pv ↦ ihm.left (.app sne (ihv.right pv))
     case sn =>
       exact extensionality (ihm.right (sn (var 0) (ihv.left .var)))
+  case Prod ihm ihn _ =>
+    refine ⟨λ sne ↦ ?sne, λ sn ↦ ?sn⟩
+    case sne m => exact .inl ⟨_, .refl, sne⟩
+    case sn =>
+      match sn with
+      | .inl ⟨_, r, sne⟩ => refine r.red (.ne sne)
+      | .inr ⟨_, _, r, pm, pn⟩ => exact r.red (.prod (ihm.right pm) (ihn.right pn))
 
 def 𝒱.sneVal {A P v} (h : ⟦ A ⟧ᵛ ↘ P) : SNeVal v → P v := (adequacy.left h).left
 def 𝒞.sneCom {B P m} (h : ⟦ B ⟧ᶜ ↘ P) : SNeCom m → P m := (adequacy.right h).left
