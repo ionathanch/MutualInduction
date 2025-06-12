@@ -48,8 +48,8 @@ Remaining proof files show interesting properties of CBPV.
   based on strong reduction, proven to step to normal forms.
 * ClosedSemantics.lean: A logical relations proof that closed, well-typed terms
   are strongly normalizing with respect to evaluation.
-* STLC.lean: Translations from STLC to CBPV corresponding to CBV and CBN semantics,
-  along with proofs that these translations preserve well-typedness.
+* CBV.lean, CBN.lean: Translations from STLC with fine-grained CBV and CBN semantics,
+  along with proofs that they preserve well-typedness and CK machine semantics.
 * Antisubstitution.lean (fails checking): An unused substitution lemma,
   similar to the antirenaming lemma.
 
@@ -63,8 +63,8 @@ Evaluation    Typing    NormalInd    Reduction
 ClosedSemantics │  │  OpenSemantics      │       Antisubstitution
                 │  │    │                │
                 ▼  ▼    ▼                ▼
-             STLC  Soundness         NormalAcc
-                          │           │
+              CBV  Soundness         NormalAcc
+              CBN         │           │
                           ▼           ▼
                           Normalization
 ```

@@ -292,17 +292,11 @@ theorem transSubst {σ} :
   mutual_induction v, t generalizing σ
   case var n => cases n <;> simp
   case unit => rfl
-  case lam ih =>
-    have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-    simp [-lift, ← ih]; rw [e, transUp]; rfl
+  case lam ih => simp [-lift, -up, ← ih, transUp]
   case inl ih | inr ih | val ih => simp [ih]
-  case app iht ihu =>
-    have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-    simp [-lift, iht, ← ihu]; rw [e, ← renameUpSubst]
+  case app iht ihu => simp [-lift, -up, iht, ← ihu, ← renameUpSubst]; simp
   case case ihs iht ihu =>
-    have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-    have e' {σ} : (.var 0 +: CBV.renameVal succ ∘ σ) = ⇑ σ := rfl
-    simp [-lift, ihs, ← iht, ← ihu]; rw [e, e, e']; constructor
+    simp [-lift, -up, -CBV.up, ihs, ← iht, ← ihu]; repeat' constructor
     all_goals rw [← transUp, ← renameUpLiftSubst]
 
 def transSubstVal {σ v} := (transSubst (σ := σ)).left (v := v)
@@ -319,28 +313,25 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ᵥ ⟨u, k'⟩) : ⟨⟦ t ⟧
   case β v =>
     calc
       _ ⤳ _ := Step.ζ
-      _ ⤳ _ := by simp [-lift]; exact Step.app
+      _ ⤳ _ := by simp [-lift, -up]; exact Step.app
       _ ⤳ _ := Step.π
       _ ⤳ _ := Step.β
       _ = _ := by
-        have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-        rw [e, ← substUnion, substDropCom₂, ← transSubstCom, substComExt]
+        rw [← substUnion, substDropCom₂, ← transSubstCom, substComExt]
         intro n; cases n <;> rfl
   case ιl =>
     calc
       _ ⤳ _ := Step.ζ
-      _ ⤳ _ := by simp [-lift]; exact Step.ιl
+      _ ⤳ _ := by simp [-lift, -up]; exact Step.ιl
       _ = _ := by
-        have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-        rw [e, ← substUnion, substDrop₂, ← transSubstCom, substComExt]
+        rw [← substUnion, substDrop₂, ← transSubstCom, substComExt]
         intro n; cases n <;> rfl
   case ιr =>
     calc
       _ ⤳ _ := Step.ζ
-      _ ⤳ _ := by simp [-lift]; exact Step.ιr
+      _ ⤳ _ := by simp [-lift, -up]; exact Step.ιr
       _ = _ := by
-        have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
-        rw [e, ← substUnion, substDrop₂, ← transSubstCom, substComExt]
+        rw [← substUnion, substDrop₂, ← transSubstCom, substComExt]
         intro n; cases n <;> rfl
   case app₁ => exact .once .letin
   case app₂ =>
