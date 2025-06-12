@@ -6,11 +6,12 @@ since the syntax of terms is mutually defined.
 
 ```
 A ::= Unit | A + A | U B
-B ::= A → B | F A
+B ::= A → B | B & B | F A
 
 v ::= x | () | inl v | inr v | {v}
 m ::= v! | λx. m | m v | return v | let x ← m in m
   | case v of {inl x => m ; inr x => m}
+  | (m, m) | m.1 | m.2
 ```
 
 This means that everything from reduction to typing to the logical relation
