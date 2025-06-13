@@ -11,6 +11,7 @@ inductive SType : Type where
   | Unit : SType
   | Arr : SType → SType → SType
   | Sum : SType → SType → SType
+  | Prod : SType → SType → SType
 open SType
 
 inductive Term : Type where
@@ -21,6 +22,9 @@ inductive Term : Type where
   | inl : Term → Term
   | inr : Term → Term
   | case : Term → Term → Term → Term
+  | prod : Term → Term → Term
+  | fst : Term → Term
+  | snd : Term → Term
 open Term
 
 /-* Renaming and substitution *-/
@@ -34,6 +38,9 @@ def rename (ξ : Nat → Nat) : Term → Term
   | inl t => inl (rename ξ t)
   | inr t => inr (rename ξ t)
   | case s t u => case (rename ξ s) (rename (lift ξ) t) (rename (lift ξ) u)
+  | prod t u => prod (rename ξ t) (rename ξ u)
+  | fst t => fst (rename ξ t)
+  | snd t => snd (rename ξ t)
 
 @[simp]
 def up (σ : Nat → Term) : Nat → Term :=
@@ -49,6 +56,9 @@ def subst (σ : Nat → Term) : Term → Term
   | inl t => inl (subst σ t)
   | inr t => inr (subst σ t)
   | case s t u => case (subst σ s) (subst (⇑ σ) t) (subst (⇑ σ) u)
+  | prod t u => prod (subst σ t) (subst σ u)
+  | fst t => fst (subst σ t)
+  | snd t => snd (subst σ t)
 
 /-* Contexts and membership *-/
 
@@ -96,6 +106,19 @@ inductive Wt : Ctxt → Term → SType → Prop where
     Γ ∷ A₂ ⊢ₛ u ∶ B →
     -------------------
     Γ ⊢ₛ case s t u ∶ B
+  | prod {Γ s t B₁ B₂} :
+    Γ ⊢ₛ s ∶ B₁ →
+    Γ ⊢ₛ t ∶ B₂ →
+    --------------------------
+    Γ ⊢ₛ prod s t ∶ Prod B₁ B₂
+  | fst {Γ t B₁ B₂} :
+    Γ ⊢ₛ t ∶ Prod B₁ B₂ →
+    ---------------
+    Γ ⊢ₛ fst t ∶ B₁
+  | snd {Γ t B₁ B₂} :
+    Γ ⊢ₛ t ∶ Prod B₁ B₂ →
+    ---------------
+    Γ ⊢ₛ snd t ∶ B₂
 end
 notation:40 Γ:41 "⊢ₛ" v:41 "∶" A:41 => Wt Γ v A
 
@@ -104,6 +127,8 @@ notation:40 Γ:41 "⊢ₛ" v:41 "∶" A:41 => Wt Γ v A
 inductive F : Type where
   | app : Term → F
   | case : Term → Term → F
+  | fst : F
+  | snd : F
 
 def K := List F
 def CK := Term × K
@@ -113,10 +138,14 @@ set_option hygiene false
 local infix:40 "⤳ₙ" => Step
 inductive Step : CK → CK → Prop where
   | β {t u k} :      ⟨lam t, .app u :: k⟩     ⤳ₙ ⟨subst (u +: var) t, k⟩
-  | ιl {s t u k} :   ⟨inl s, .case t u :: k ⟩ ⤳ₙ ⟨subst (s +: var) t, k⟩
-  | ιr {s t u k} :   ⟨inr s, .case t u :: k ⟩ ⤳ₙ ⟨subst (s +: var) u, k⟩
+  | ιl {s t u k} :   ⟨inl s, .case t u :: k⟩  ⤳ₙ ⟨subst (s +: var) t, k⟩
+  | ιr {s t u k} :   ⟨inr s, .case t u :: k⟩  ⤳ₙ ⟨subst (s +: var) u, k⟩
+  | πl {m n k} :     ⟨.prod m n, .fst :: k⟩   ⤳ₙ ⟨m, k⟩
+  | πr {m n k} :     ⟨.prod m n, .snd :: k⟩   ⤳ₙ ⟨n, k⟩
   | app {t u k} :    ⟨app t u, k⟩             ⤳ₙ ⟨t, .app u :: k⟩
   | case {s t u k} : ⟨case s t u, k⟩          ⤳ₙ ⟨s, .case t u :: k⟩
+  | fst {m k} :      ⟨.fst m, k⟩              ⤳ₙ ⟨m, .fst :: k⟩
+  | snd {m k} :      ⟨.snd m, k⟩              ⤳ₙ ⟨m, .snd :: k⟩
 end
 infix:40 "⤳ₙ" => Step
 
@@ -135,6 +164,7 @@ def transType : CBN.SType → ComType
   | .Unit => .F .Unit
   | .Sum A₁ A₂ => .F (.Sum (.U (⟦ A₁ ⟧ᵀ)) (.U (⟦ A₂ ⟧ᵀ)))
   | .Arr A B => .Arr (.U (⟦ A ⟧ᵀ)) (⟦ B ⟧ᵀ)
+  | .Prod B₁ B₂ => .Prod (⟦ B₁ ⟧ᵀ) (⟦ B₂ ⟧ᵀ)
 end
 notation:40 "⟦" A:41 "⟧ᵀ" => transType A
 
@@ -166,6 +196,9 @@ def transTerm : CBN.Term → Com
       (.case (.var 0)
         (renameCom (lift succ) (⟦ t ⟧ᵗ))
         (renameCom (lift succ) (⟦ u ⟧ᵗ)))
+  | .prod t u => .prod (⟦ t ⟧ᵗ) (⟦ u ⟧ᵗ)
+  | .fst t => .prjl (⟦ t ⟧ᵗ)
+  | .snd t => .prjr (⟦ t ⟧ᵗ)
 end
 notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
 
@@ -183,6 +216,8 @@ def transK : CBN.K → K
   | .case t u :: k => .letin (.case (.var 0)
                         (renameCom (lift succ) (⟦ t ⟧ᵗ))
                         (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
+  | .fst :: k => .prjl :: (⟦ k ⟧ᴷ)
+  | .snd :: k => .prjr :: (⟦ k ⟧ᴷ)
 end
 notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 
@@ -203,6 +238,9 @@ inductive transTerm' : CBN.Term → Com → Prop where
         (.case (.var 0)
           (renameCom (lift succ) mt)
           (renameCom (lift succ) mu))
+  | prod {t u m n} : t ↦ₙ m → u ↦ₙ n → .prod t u ↦ₙ .prod m n
+  | fst {t m} : t ↦ₙ m → .fst t ↦ₙ .prjl m
+  | snd {t m} : t ↦ₙ m → .snd t ↦ₙ .prjr m
   | ft {t m} : t ↦ₙ m → t ↦ₙ .force (.thunk m)
 end
 infix:40 "↦ₙ" => transTerm'
@@ -229,15 +267,18 @@ theorem preservation {Γ t A} (h : Γ ⊢ₛ t ∶ A) : (⟦ Γ ⟧ᶜ) ⊢ (⟦
   case inr ih => exact .ret (.inr (.thunk ih))
   case case ihs iht ihu =>
     exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
+  case prod iht ihu => exact .prod iht ihu
+  case fst ih => exact .prjl ih
+  case snd ih => exact .prjr ih
 
 /-* Translation commutes with renaming and substitution *-/
 
 theorem transRename {ξ t m} (h : t ↦ₙ m) : CBN.rename ξ t ↦ₙ renameCom ξ m := by
   induction h generalizing ξ
-  case var | unit | inl | inr | app | lam | ft => constructor <;> apply_assumption
   case case ihs iht ihu =>
     simp [-lift]; rw [renameLiftLiftRename, renameLiftLiftRename]
     exact .case ihs iht ihu
+  all_goals constructor <;> apply_assumption
 
 theorem transUp {σ : Nat → CBN.Term} {σ' : Nat → Val}
   (h : ∀ x, σ x ↦ₙ .force (σ' x)) : ∀ x, (⇑ σ) x ↦ₙ .force ((⇑ σ') x) := by
@@ -249,11 +290,11 @@ theorem transUp {σ : Nat → CBN.Term} {σ' : Nat → Val}
 theorem transSubst {σ σ' t} (h : ∀ x, σ x ↦ₙ .force (σ' x)) : CBN.subst σ t ↦ₙ substCom σ' (⟦t⟧ᵗ) := by
   induction t generalizing σ σ'
   case var => exact h _
-  case unit | inl | inr | app => constructor <;> apply_rules
   case lam ih => exact .lam (ih (transUp h))
   case case ihs iht ihu =>
     simp [-up, -lift]; rw [← renameUpLiftSubst, ← renameUpLiftSubst]
     exact .case (ihs h) (iht (transUp h)) (ihu (transUp h))
+  all_goals constructor <;> apply_rules
 
 theorem transSubstSingle {t u} : CBN.subst (u +: .var) t ↦ₙ (⟦t⟧ᵗ) ⦃ Val.thunk (⟦ u ⟧ᵗ) +: .var ⦄ := by
   refine transSubst (λ n ↦ ?_); cases n <;> constructor; exact transTransTerm
@@ -283,5 +324,9 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ₙ ⟨u, k'⟩) : ∃ m, ⟨�
       _ = _ := by
         have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
         rw [e, ← substUnion, substDropCom₂]
+  case πl => exact ⟨_, .once .πl, transTransTerm⟩
+  case πr => exact ⟨_, .once .πr, transTransTerm⟩
   case app => exact ⟨_, .once .app, transTransTerm⟩
   case case => exact ⟨_, .once .letin, transTransTerm⟩
+  case fst => exact ⟨_, .once .prjl, transTransTerm⟩
+  case snd => exact ⟨_, .once .prjr, transTransTerm⟩

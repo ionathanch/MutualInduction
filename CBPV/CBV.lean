@@ -11,6 +11,7 @@ inductive VType : Type where
   | Unit : VType
   | Arr : VType → VType → VType
   | Sum : VType → VType → VType
+  | Pair : VType → VType → VType
 open VType
 
 mutual
@@ -20,11 +21,14 @@ inductive Value : Type where
   | lam : Term → Value
   | inl : Value → Value
   | inr : Value → Value
+  | pair : Value → Value → Value
 
 inductive Term : Type where
   | val : Value → Term
   | app : Term → Term → Term
   | case : Term → Term → Term → Term
+  | fst : Term → Term
+  | snd : Term → Term
 end
 open Term
 open Value
@@ -39,12 +43,15 @@ def renameVal (ξ : Nat → Nat) : Value → Value
   | lam t => lam (rename (lift ξ) t)
   | inl v => inl (renameVal ξ v)
   | inr v => inr (renameVal ξ v)
+  | pair v w => pair (renameVal ξ v) (renameVal ξ w)
 
 @[simp]
 def rename (ξ : Nat → Nat) : Term → Term
   | val v => val (renameVal ξ v)
   | app t u => app (rename ξ t) (rename ξ u)
   | case s t u => case (rename ξ s) (rename (lift ξ) t) (rename (lift ξ) u)
+  | fst t => fst (rename ξ t)
+  | snd t => snd (rename ξ t)
 end
 
 @[simp]
@@ -60,12 +67,15 @@ def substVal (σ : Nat → Value) : Value → Value
   | lam t => lam (subst (⇑ σ) t)
   | inl v => inl (substVal σ v)
   | inr v => inr (substVal σ v)
+  | pair v w => pair (substVal σ v) (substVal σ w)
 
 @[simp]
 def subst (σ : Nat → Value) : Term → Term
   | val v => val (substVal σ v)
   | app t u => app (subst σ t) (subst σ u)
   | case s t u => case (subst σ s) (subst (⇑ σ) t) (subst (⇑ σ) u)
+  | fst t => fst (subst σ t)
+  | snd t => snd (subst σ t)
 end
 
 /-* Contexts and membership *-/
@@ -99,14 +109,19 @@ inductive WtVal : Ctxt → Value → VType → Prop where
     Γ ∷ A ⊢ₛ t ∶ B →
     --------------------
     Γ ⊢ᵥ lam t ∶ Arr A B
-  | inl {Γ t} {A₁ A₂ : VType} :
-    Γ ⊢ᵥ t ∶ A₁ →
+  | inl {Γ v} {A₁ A₂ : VType} :
+    Γ ⊢ᵥ v ∶ A₁ →
     ----------------------
-    Γ ⊢ᵥ inl t ∶ Sum A₁ A₂
-  | inr {Γ t} {A₁ A₂ : VType} :
-    Γ ⊢ᵥ t ∶ A₂ →
+    Γ ⊢ᵥ inl v ∶ Sum A₁ A₂
+  | inr {Γ v} {A₁ A₂ : VType} :
+    Γ ⊢ᵥ v ∶ A₂ →
     ----------------------
-    Γ ⊢ᵥ inr t ∶ Sum A₁ A₂
+    Γ ⊢ᵥ inr v ∶ Sum A₁ A₂
+  | pair {Γ v w} {A₁ A₂ : VType} :
+    Γ ⊢ᵥ v ∶ A₁ →
+    Γ ⊢ᵥ w ∶ A₂ →
+    --------------------------
+    Γ ⊢ᵥ pair v w ∶ Pair A₁ A₂
 
 inductive Wt : Ctxt → Term → VType → Prop where
   | val {Γ v A} :
@@ -124,6 +139,14 @@ inductive Wt : Ctxt → Term → VType → Prop where
     Γ ∷ A₂ ⊢ₛ u ∶ B →
     -------------------
     Γ ⊢ₛ case s t u ∶ B
+  | fst {Γ t A₁ A₂} :
+    Γ ⊢ₛ t ∶ Pair A₁ A₂ →
+    ---------------
+    Γ ⊢ₛ fst t ∶ A₁
+  | snd {Γ t A₁ A₂} :
+    Γ ⊢ₛ t ∶ Pair A₁ A₂ →
+    ---------------
+    Γ ⊢ₛ snd t ∶ A₂
 end
 end
 
@@ -136,6 +159,8 @@ inductive F : Type where
   | app₁ : Term → F
   | app₂ : Value → F
   | case : Term → Term → F
+  | fst : F
+  | snd : F
 
 def K := List F
 def CK := Term × K
@@ -147,9 +172,13 @@ inductive Step : CK → CK → Prop where
   | β  {t v k} :     ⟨.val v, .app₂ (.lam t) :: k⟩  ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιl {v t u k} :   ⟨.val (inl v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιr {v t u k} :   ⟨.val (inr v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) u, k⟩
+  | πl {v w k} :     ⟨.val (pair v w), .fst :: k⟩   ⤳ᵥ ⟨.val v, k⟩
+  | πr {v w k} :     ⟨.val (pair v w), .snd :: k⟩   ⤳ᵥ ⟨.val w, k⟩
   | app₁ {t u k} :   ⟨app t u, k⟩                   ⤳ᵥ ⟨t, .app₁ u :: k⟩
   | app₂ {t v k} :   ⟨.val v, .app₁ t :: k⟩         ⤳ᵥ ⟨t, .app₂ v :: k⟩
   | case {s t u k} : ⟨case s t u, k⟩                ⤳ᵥ ⟨s, .case t u :: k⟩
+  | fst {t k} :      ⟨fst t, k⟩                     ⤳ᵥ ⟨t, .fst :: k⟩
+  | snd {t k} :      ⟨snd t, k⟩                     ⤳ᵥ ⟨t, .snd :: k⟩
 end
 infix:40 "⤳ᵥ" => Step
 
@@ -169,6 +198,7 @@ def transType : CBV.VType → ValType
   | .Unit => .Unit
   | .Sum A₁ A₂ => .Sum (⟦ A₁ ⟧ᵀ) (⟦ A₂ ⟧ᵀ)
   | .Arr A B => .U (.Arr (⟦ A ⟧ᵀ) (.F (⟦ B ⟧ᵀ)))
+  | .Pair A₁ A₂ => .U (.Prod (.F (⟦ A₁ ⟧ᵀ)) (.F (⟦ A₂ ⟧ᵀ)))
 end
 notation:40 "⟦" A:41 "⟧ᵀ" => transType A
 
@@ -199,6 +229,7 @@ def transValue : CBV.Value → Val
   | .lam t => .thunk (.lam (⟦ t ⟧ᵗ))
   | .inl v => .inl (⟦ v ⟧ᵛ)
   | .inr v => .inr (⟦ v ⟧ᵛ)
+  | .pair v w => .thunk (.prod (.ret (⟦ v ⟧ᵛ)) (.ret (⟦ w ⟧ᵛ)))
 
 @[simp]
 def transTerm : CBV.Term → Com
@@ -212,6 +243,8 @@ def transTerm : CBV.Term → Com
       (.case (.var 0)
         (renameCom (lift succ) (⟦ t ⟧ᵗ))
         (renameCom (lift succ) (⟦ u ⟧ᵗ)))
+  | .fst t => .letin (⟦ t ⟧ᵗ) (.prjl (.force (.var 0)))
+  | .snd t => .letin (⟦ t ⟧ᵗ) (.prjr (.force (.var 0)))
 end
 end
 
@@ -235,6 +268,8 @@ def transK : CBV.K → K
   | .case t u :: k => .letin (.case (.var 0)
                         (renameCom (lift succ) (⟦ t ⟧ᵗ))
                         (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
+  | .fst :: k      => .letin (.prjl (.force (.var 0))) :: (⟦ k ⟧ᴷ)
+  | .snd :: k      => .letin (.prjr (.force (.var 0))) :: (⟦ k ⟧ᴷ)
 end
 notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 
@@ -257,6 +292,7 @@ theorem preservation {Γ A} :
   case lam ih => exact .thunk (.lam ih)
   case inl ih => exact .inl ih
   case inr ih => exact .inr ih
+  case pair ihv ihw => exact (.thunk (.prod (.ret ihv) (.ret ihw)))
   case val ih => exact .ret ih
   case app iht ihu =>
     exact .letin iht
@@ -264,6 +300,8 @@ theorem preservation {Γ A} :
         (.app (.force (.var (.there .here))) (.var .here)))
   case case ihs iht ihu =>
     exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
+  case fst ih => exact .letin ih (.prjl (.force (.var .here)))
+  case snd ih => exact .letin ih (.prjr (.force (.var .here)))
 
 /-* Translation commutes with renaming and substitution *-/
 
@@ -274,7 +312,8 @@ theorem transRename {ξ} :
   mutual_induction v, t generalizing ξ
   case var n => cases n <;> rfl
   case unit => rfl
-  case lam ih | inl ih | inr ih | val ih => simp [ih]
+  case lam ih | inl ih | inr ih | val ih | fst ih | snd ih => simp [ih]
+  case pair ihv ihw => simp [ihv, ihw]
   case app iht ihu => simp [iht, ← ihu, renameLiftRename]
   case case ihs iht ihu =>
     simp [-lift, ihs, ← iht, ← ihu, renameLiftLiftRename]; rfl
@@ -293,7 +332,8 @@ theorem transSubst {σ} :
   case var n => cases n <;> simp
   case unit => rfl
   case lam ih => simp [-lift, -up, ← ih, transUp]
-  case inl ih | inr ih | val ih => simp [ih]
+  case inl ih | inr ih | val ih | fst ih | snd ih => simp [ih]
+  case pair ihv ihw => simp [ihv, ihw]
   case app iht ihu => simp [-lift, -up, iht, ← ihu, ← renameUpSubst]; simp
   case case ihs iht ihu =>
     simp [-lift, -up, -CBV.up, ihs, ← iht, ← ihu]; repeat' constructor
@@ -333,6 +373,20 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ᵥ ⟨u, k'⟩) : ⟨⟦ t ⟧
       _ = _ := by
         rw [← substUnion, substDrop₂, ← transSubstCom, substComExt]
         intro n; cases n <;> rfl
+  case πl =>
+    simp
+    calc
+      _ ⤳ _ := Step.ζ
+      _ ⤳ _ := by simp; exact Step.prjl
+      _ ⤳ _ := Step.π
+      _ ⤳ _ := Step.πl
+  case πr =>
+    simp
+    calc
+      _ ⤳ _ := Step.ζ
+      _ ⤳ _ := by simp; exact Step.prjr
+      _ ⤳ _ := Step.π
+      _ ⤳ _ := Step.πr
   case app₁ => exact .once .letin
   case app₂ =>
     calc
@@ -340,3 +394,5 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ᵥ ⟨u, k'⟩) : ⟨⟦ t ⟧
       _ ⤳ _ := by simp; exact Step.letin
       _ = _ := by simp [← substDropCom]
   case case => exact .once .letin
+  case fst => exact .once .letin
+  case snd => exact .once .letin
