@@ -4,8 +4,8 @@ import CBPV.Syntax
 inductive F : Type where
   | app : Val → F
   | letin : Com → F
-  | prjl : F
-  | prjr : F
+  | fst : F
+  | snd : F
 
 def K := List F
 def CK := Com × K
@@ -18,13 +18,13 @@ inductive Step : CK → CK → Prop where
   | ιl {v m n k} :  ⟨.case (.inl v) m n, k⟩ ⤳ ⟨substCom (v +: .var) m, k⟩
   | ιr {v m n k} :  ⟨.case (.inr v) m n, k⟩ ⤳ ⟨substCom (v +: .var) n, k⟩
   | π {m k} :       ⟨.force (.thunk m), k⟩  ⤳ ⟨m, k⟩
-  | πl {m n k} :    ⟨.prod m n, .prjl :: k⟩ ⤳ ⟨m, k⟩
-  | πr {m n k} :    ⟨.prod m n, .prjr :: k⟩ ⤳ ⟨n, k⟩
+  | π1 {m n k} :    ⟨.prod m n, .fst :: k⟩  ⤳ ⟨m, k⟩
+  | π2 {m n k} :    ⟨.prod m n, .snd :: k⟩  ⤳ ⟨n, k⟩
   | ζ {v m k} :     ⟨.ret v, .letin m :: k⟩ ⤳ ⟨substCom (v +: .var) m, k⟩
   | app {m v k} :   ⟨.app m v, k⟩           ⤳ ⟨m, .app v :: k⟩
   | letin {m n k} : ⟨.letin m n, k⟩         ⤳ ⟨m, .letin n :: k⟩
-  | prjl {m k} :    ⟨.prjl m, k⟩            ⤳ ⟨m, .prjl :: k⟩
-  | prjr {m k} :    ⟨.prjr m, k⟩            ⤳ ⟨m, .prjr :: k⟩
+  | fst {m k} :     ⟨.fst m, k⟩             ⤳ ⟨m, .fst :: k⟩
+  | snd {m k} :     ⟨.snd m, k⟩             ⤳ ⟨m, .snd :: k⟩
 end
 infix:40 "⤳" => Step
 

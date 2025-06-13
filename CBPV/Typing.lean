@@ -61,14 +61,14 @@ inductive ComWt : Ctxt → Com → ComType → Prop where
     Γ ⊢ n ∶ B₂ →
     -------------------------
     Γ ⊢ prod m n ∶ Prod B₁ B₂
-  | prjl {Γ m} {B₁ B₂ : ComType} :
+  | fst {Γ m} {B₁ B₂ : ComType} :
     Γ ⊢ m ∶ Prod B₁ B₂ →
     --------------------
-    Γ ⊢ prjl m ∶ B₁
-  | prjr {Γ m} {B₁ B₂ : ComType} :
+    Γ ⊢ fst m ∶ B₁
+  | snd {Γ m} {B₁ B₂ : ComType} :
     Γ ⊢ m ∶ Prod B₁ B₂ →
     --------------------
-    Γ ⊢ prjr m ∶ B₂
+    Γ ⊢ snd m ∶ B₂
 end
 end
 

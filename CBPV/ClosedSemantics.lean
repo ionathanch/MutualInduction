@@ -96,7 +96,7 @@ theorem soundness {Γ} :
   case force ih =>
     simp at ih
     let ⟨_, ⟨_, ⟨r, _⟩, h⟩, e⟩ := ih σ hσ
-    let rf : _ ⇒⋆ _ := .trans .force r
+    let rf : _ ⇒⋆ _ := .trans .π r
     rw [← e] at rf
     exact 𝒞bwd rf h
   case lam ih =>
@@ -107,39 +107,39 @@ theorem soundness {Γ} :
     simp at ihm
     let ⟨_, ⟨rlam, _⟩, _, h, e⟩ := ihm σ hσ; subst e
     let ⟨_, ⟨rval, _⟩, h⟩ := h _ (ihv σ hσ)
-    exact 𝒞bwd (Trans.trans (Evals.app rlam) (Trans.trans Eval.lam rval)) h
+    exact 𝒞bwd (Trans.trans (Evals.app rlam) (Trans.trans Eval.β rval)) h
   case ret ih => exact 𝒞ℰ (𝒞.ret (ih σ hσ))
   case letin ihret ih =>
     simp at ihret ih
     let ⟨_, ⟨rret, _⟩, v, hv, e⟩ := ihret σ hσ; subst e
     let ⟨_, ⟨rlet, nflet⟩, h⟩ := ih (v +: σ) (semCtxtCons hv hσ)
     rw [substUnion] at rlet
-    exact 𝒞bwd (Trans.trans (Evals.let rret) (Trans.trans Eval.ret rlet)) h
+    exact 𝒞bwd (Trans.trans (Evals.let rret) (Trans.trans Eval.ζ rlet)) h
   case case m n _ _ _ _ _ _ ihv ihm ihn =>
     simp at ihv
     match ihv σ hσ with
     | .inl ⟨v, hv, e⟩ =>
       let hm := ihm (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hm
-      exact ℰbwd (.once .inl) hm
+      exact ℰbwd (.once .ι1) hm
     | .inr ⟨v, hv, e⟩ =>
       let hn := ihn (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hn
-      exact ℰbwd (.once .inr) hn
+      exact ℰbwd (.once .ι2) hn
   case prod m n _ _ _ _ ihm ihn =>
     simp at ihm ihn
     let ⟨_, ⟨rm, _⟩, hm⟩ := ihm σ hσ
     let ⟨_, ⟨rn, _⟩, hn⟩ := ihn σ hσ
     apply 𝒞ℰ; exact 𝒞.prod (𝒞bwd rm hm) (𝒞bwd rn hn)
-  case prjl ih =>
+  case fst ih =>
     simp [-𝒞] at ih; unfold 𝒞 at ih
     let ⟨_, ⟨rprod, nfprod⟩, n₁, n₂, hm, _, e⟩ := ih σ hσ; subst e
-    let r : prjl (_⦃σ⦄) ⇒⋆ n₁ := Trans.trans (Evals.prjl rprod) Eval.prodl
+    let r : fst (_⦃σ⦄) ⇒⋆ n₁ := Trans.trans (Evals.fst rprod) Eval.π1
     exact ℰbwd r hm
-  case prjr ih =>
+  case snd ih =>
     simp [-𝒞] at ih; unfold 𝒞 at ih
     let ⟨_, ⟨rprod, nfprod⟩, n₁, n₂, _, hn, e⟩ := ih σ hσ; subst e
-    let r : prjr (_⦃σ⦄) ⇒⋆ n₂ := Trans.trans (Evals.prjr rprod) Eval.prodr
+    let r : snd (_⦃σ⦄) ⇒⋆ n₂ := Trans.trans (Evals.snd rprod) Eval.π2
     exact ℰbwd r hn
 
 -- If a computation does not step, then it is in normal form

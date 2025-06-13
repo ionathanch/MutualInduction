@@ -140,8 +140,8 @@ inductive Step : CK → CK → Prop where
   | β {t u k} :      ⟨lam t, .app u :: k⟩     ⤳ₙ ⟨subst (u +: var) t, k⟩
   | ιl {s t u k} :   ⟨inl s, .case t u :: k⟩  ⤳ₙ ⟨subst (s +: var) t, k⟩
   | ιr {s t u k} :   ⟨inr s, .case t u :: k⟩  ⤳ₙ ⟨subst (s +: var) u, k⟩
-  | πl {m n k} :     ⟨.prod m n, .fst :: k⟩   ⤳ₙ ⟨m, k⟩
-  | πr {m n k} :     ⟨.prod m n, .snd :: k⟩   ⤳ₙ ⟨n, k⟩
+  | π1 {m n k} :     ⟨.prod m n, .fst :: k⟩   ⤳ₙ ⟨m, k⟩
+  | π2 {m n k} :     ⟨.prod m n, .snd :: k⟩   ⤳ₙ ⟨n, k⟩
   | app {t u k} :    ⟨app t u, k⟩             ⤳ₙ ⟨t, .app u :: k⟩
   | case {s t u k} : ⟨case s t u, k⟩          ⤳ₙ ⟨s, .case t u :: k⟩
   | fst {m k} :      ⟨.fst m, k⟩              ⤳ₙ ⟨m, .fst :: k⟩
@@ -197,8 +197,8 @@ def transTerm : CBN.Term → Com
         (renameCom (lift succ) (⟦ t ⟧ᵗ))
         (renameCom (lift succ) (⟦ u ⟧ᵗ)))
   | .prod t u => .prod (⟦ t ⟧ᵗ) (⟦ u ⟧ᵗ)
-  | .fst t => .prjl (⟦ t ⟧ᵗ)
-  | .snd t => .prjr (⟦ t ⟧ᵗ)
+  | .fst t => .fst (⟦ t ⟧ᵗ)
+  | .snd t => .snd (⟦ t ⟧ᵗ)
 end
 notation:40 "⟦" t:41 "⟧ᵗ" => transTerm t
 
@@ -216,8 +216,8 @@ def transK : CBN.K → K
   | .case t u :: k => .letin (.case (.var 0)
                         (renameCom (lift succ) (⟦ t ⟧ᵗ))
                         (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
-  | .fst :: k => .prjl :: (⟦ k ⟧ᴷ)
-  | .snd :: k => .prjr :: (⟦ k ⟧ᴷ)
+  | .fst :: k => .fst :: (⟦ k ⟧ᴷ)
+  | .snd :: k => .snd :: (⟦ k ⟧ᴷ)
 end
 notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 
@@ -239,8 +239,8 @@ inductive transTerm' : CBN.Term → Com → Prop where
           (renameCom (lift succ) mt)
           (renameCom (lift succ) mu))
   | prod {t u m n} : t ↦ₙ m → u ↦ₙ n → .prod t u ↦ₙ .prod m n
-  | fst {t m} : t ↦ₙ m → .fst t ↦ₙ .prjl m
-  | snd {t m} : t ↦ₙ m → .snd t ↦ₙ .prjr m
+  | fst {t m} : t ↦ₙ m → .fst t ↦ₙ .fst m
+  | snd {t m} : t ↦ₙ m → .snd t ↦ₙ .snd m
   | ft {t m} : t ↦ₙ m → t ↦ₙ .force (.thunk m)
 end
 infix:40 "↦ₙ" => transTerm'
@@ -268,8 +268,8 @@ theorem preservation {Γ t A} (h : Γ ⊢ₛ t ∶ A) : (⟦ Γ ⟧ᶜ) ⊢ (⟦
   case case ihs iht ihu =>
     exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
   case prod iht ihu => exact .prod iht ihu
-  case fst ih => exact .prjl ih
-  case snd ih => exact .prjr ih
+  case fst ih => exact .fst ih
+  case snd ih => exact .snd ih
 
 /-* Translation commutes with renaming and substitution *-/
 
@@ -324,9 +324,9 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ₙ ⟨u, k'⟩) : ∃ m, ⟨�
       _ = _ := by
         have e {σ} : (.var 0 +: renameVal succ ∘ σ) = ⇑ σ := rfl
         rw [e, ← substUnion, substDropCom₂]
-  case πl => exact ⟨_, .once .πl, transTransTerm⟩
-  case πr => exact ⟨_, .once .πr, transTransTerm⟩
+  case π1 => exact ⟨_, .once .π1, transTransTerm⟩
+  case π2 => exact ⟨_, .once .π2, transTransTerm⟩
   case app => exact ⟨_, .once .app, transTransTerm⟩
   case case => exact ⟨_, .once .letin, transTransTerm⟩
-  case fst => exact ⟨_, .once .prjl, transTransTerm⟩
-  case snd => exact ⟨_, .once .prjr, transTransTerm⟩
+  case fst => exact ⟨_, .once .fst, transTransTerm⟩
+  case snd => exact ⟨_, .once .snd, transTransTerm⟩

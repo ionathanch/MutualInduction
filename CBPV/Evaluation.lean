@@ -11,13 +11,13 @@ section
 set_option hygiene false
 local infix:40 "⇒" => Eval
 inductive Eval : Com → Com → Prop where
-  | force {m} : force (thunk m) ⇒ m
-  | lam {m v} : app (lam m) v ⇒ m⦃v⦄
-  | ret {v m} : letin (ret v) m ⇒ m⦃v⦄
-  | inl {v m n} : case (inl v) m n ⇒ m⦃v⦄
-  | inr {v m n} : case (inr v) m n ⇒ n⦃v⦄
-  | prodl {m n} : prjl (prod m n) ⇒ m
-  | prodr {m n} : prjr (prod m n) ⇒ n
+  | π {m} : force (thunk m) ⇒ m
+  | β {m v} : app (lam m) v ⇒ m⦃v⦄
+  | ζ {v m} : letin (ret v) m ⇒ m⦃v⦄
+  | ι1 {v m n} : case (inl v) m n ⇒ m⦃v⦄
+  | ι2 {v m n} : case (inr v) m n ⇒ n⦃v⦄
+  | π1 {m n} : fst (prod m n) ⇒ m
+  | π2 {m n} : snd (prod m n) ⇒ n
   | app {m m' v} :
     m ⇒ m' →
     ------------------
@@ -26,14 +26,14 @@ inductive Eval : Com → Com → Prop where
     m ⇒ m' →
     ----------------------
     letin m n ⇒ letin m' n
-  | prjl {m m'} :
+  | fst {m m'} :
     m ⇒ m' →
     ----------------
-    prjl m ⇒ prjl m'
-  | prjr {m m'} :
+    fst m ⇒ fst m'
+  | snd {m m'} :
     m ⇒ m' →
     ----------------
-    prjr m ⇒ prjr m'
+    snd m ⇒ snd m'
 end
 infix:40 "⇒" => Eval
 
@@ -41,7 +41,7 @@ infix:40 "⇒" => Eval
 theorem evalDet {m n₁ n₂} (r₁ : m ⇒ n₁) (r₂ : m ⇒ n₂) : n₁ = n₂ := by
   induction r₁ generalizing n₂
   all_goals cases r₂; try rfl
-  case prjl.prjl ih _ r | prjr.prjr ih _ r => rw [ih r]
+  case fst.fst ih _ r | snd.snd ih _ r => rw [ih r]
   all_goals try apply_rules [appCong, letinCong, prodCong]
   all_goals rename _ ⇒ _ => r; cases r
 
@@ -62,15 +62,15 @@ theorem Evals.let {m m' n} (r : m ⇒⋆ m') : letin m n ⇒⋆ letin m' n := by
   case refl => exact .refl
   case trans r _ ih => exact .trans (.letin r) ih
 
-theorem Evals.prjl {m m'} (r : m ⇒⋆ m') : prjl m ⇒⋆ prjl m' := by
+theorem Evals.fst {m m'} (r : m ⇒⋆ m') : fst m ⇒⋆ fst m' := by
   induction r
   case refl => exact .refl
-  case trans r _ ih => exact .trans (.prjl r) ih
+  case trans r _ ih => exact .trans (.fst r) ih
 
-theorem Evals.prjr {m m'} (r : m ⇒⋆ m') : prjr m ⇒⋆ prjr m' := by
+theorem Evals.snd {m m'} (r : m ⇒⋆ m') : snd m ⇒⋆ snd m' := by
   induction r
   case refl => exact .refl
-  case trans r _ ih => exact .trans (.prjr r) ih
+  case trans r _ ih => exact .trans (.snd r) ih
 
 -- Multi-step reduction is confluent trivially by determinism
 theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) : ∃ m', n₁ ⇒⋆ m' ∧ n₂ ⇒⋆ m' := by
@@ -88,7 +88,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
 @[simp]
 def nf : Com → Prop
   | lam _ | ret _ | prod _ _ => True
-  | force _ | .app _ _ | letin _ _ | case _ _ _ | prjl _ | prjr _ => False
+  | force _ | .app _ _ | letin _ _ | case _ _ _ | fst _ | snd _ => False
 
 theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *

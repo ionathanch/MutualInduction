@@ -77,7 +77,7 @@ theorem antisubstitution {σ} :
     | .inl ⟨_, e, r⟩ =>
       exact .red r (ihm (Eq.symm e))
     | .inr snem => exact .ne snem
-  case srcom.thunk ih m =>
+  case srcom.π ih m =>
     cases m <;> try contradiction
     injection e with e
     case force v =>
@@ -85,24 +85,24 @@ theorem antisubstitution {σ} :
     case var => exact .inr (.force .var)
     case thunk =>
     injection e with e
-    exact .inl ⟨_, Eq.symm e, .thunk⟩
-  case srcom.lam ih m =>
+    exact .inl ⟨_, Eq.symm e, .π⟩
+  case srcom.β ih m =>
     cases m <;> try contradiction
     injection e with em ev
     case app m _ =>
     cases m <;> try contradiction
     injection em with em
     subst ev em; rw [substDist]
-    exact .inl ⟨_, rfl, .lam (ih rfl)⟩
-  case srcom.ret ih m =>
+    exact .inl ⟨_, rfl, .β (ih rfl)⟩
+  case srcom.ζ ih m =>
     cases m <;> try contradiction
     injection e with ev em
     case letin m _ =>
     cases m <;> try contradiction
     injection ev with ev
     subst ev em; rw [substDist]
-    exact .inl ⟨_, rfl, .ret (ih rfl)⟩
-  case srcom.inl ihv ihn m =>
+    exact .inl ⟨_, rfl, .ζ (ih rfl)⟩
+  case srcom.ι1 ihv ihn m =>
     cases m <;> try contradiction
     injection e with ev em en
     case case v _ _ =>
@@ -111,8 +111,8 @@ theorem antisubstitution {σ} :
     case inl =>
     injection ev with ev
     subst ev em en; rw [substDist]
-    exact .inl ⟨_, rfl, .inl (ihv rfl) (ihn rfl)⟩
-  case srcom.inr ihv ihm m =>
+    exact .inl ⟨_, rfl, .ι1 (ihv rfl) (ihn rfl)⟩
+  case srcom.ι2 ihv ihm m =>
     cases m <;> try contradiction
     injection e with ev em en
     case case v _ _ =>
@@ -121,7 +121,7 @@ theorem antisubstitution {σ} :
     case inr =>
     injection ev with ev
     subst ev em en; rw [substDist]
-    exact .inl ⟨_, rfl, .inr (ihv rfl) (ihm rfl)⟩
+    exact .inl ⟨_, rfl, .ι2 (ihv rfl) (ihm rfl)⟩
   case srcom.app ihv ihm m =>
     cases m <;> try contradiction
     injection e with em ev
@@ -154,7 +154,7 @@ theorem SNCom.app_inv {m v} (h : SNCom (app m v)) : SNCom m ∧ SNVal v := by
   | .app snem snv => exact ⟨.ne snem, snv⟩
   case red sn ih r =>
     cases r
-    case lam snv => exact ⟨.lam sn.antisubstitution, snv⟩
+    case β snv => exact ⟨.lam sn.antisubstitution, snv⟩
     case app r _ => let ⟨snn, snv⟩ := ih rfl; exact ⟨.red r snn, snv⟩
 
 theorem SNCom.letin_inv {m n} (h : SNCom (letin m n)) : SNCom m ∧ SNCom n := by
@@ -165,5 +165,5 @@ theorem SNCom.letin_inv {m n} (h : SNCom (letin m n)) : SNCom m ∧ SNCom n := b
   | .letin snem snn => exact ⟨.ne snem, snn⟩
   case red sn ih r =>
     cases r
-    case ret snv => exact ⟨.ret snv, sn.antisubstitution⟩
+    case ζ snv => exact ⟨.ret snv, sn.antisubstitution⟩
     case letin r _ => let ⟨snm, snn⟩ := ih rfl; exact ⟨.red r snm, snn⟩

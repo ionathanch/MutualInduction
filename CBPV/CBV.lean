@@ -172,8 +172,8 @@ inductive Step : CK → CK → Prop where
   | β  {t v k} :     ⟨.val v, .app₂ (.lam t) :: k⟩  ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιl {v t u k} :   ⟨.val (inl v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) t, k⟩
   | ιr {v t u k} :   ⟨.val (inr v), .case t u :: k⟩ ⤳ᵥ ⟨subst (v +: var) u, k⟩
-  | πl {v w k} :     ⟨.val (pair v w), .fst :: k⟩   ⤳ᵥ ⟨.val v, k⟩
-  | πr {v w k} :     ⟨.val (pair v w), .snd :: k⟩   ⤳ᵥ ⟨.val w, k⟩
+  | π1 {v w k} :     ⟨.val (pair v w), .fst :: k⟩   ⤳ᵥ ⟨.val v, k⟩
+  | π2 {v w k} :     ⟨.val (pair v w), .snd :: k⟩   ⤳ᵥ ⟨.val w, k⟩
   | app₁ {t u k} :   ⟨app t u, k⟩                   ⤳ᵥ ⟨t, .app₁ u :: k⟩
   | app₂ {t v k} :   ⟨.val v, .app₁ t :: k⟩         ⤳ᵥ ⟨t, .app₂ v :: k⟩
   | case {s t u k} : ⟨case s t u, k⟩                ⤳ᵥ ⟨s, .case t u :: k⟩
@@ -243,8 +243,8 @@ def transTerm : CBV.Term → Com
       (.case (.var 0)
         (renameCom (lift succ) (⟦ t ⟧ᵗ))
         (renameCom (lift succ) (⟦ u ⟧ᵗ)))
-  | .fst t => .letin (⟦ t ⟧ᵗ) (.prjl (.force (.var 0)))
-  | .snd t => .letin (⟦ t ⟧ᵗ) (.prjr (.force (.var 0)))
+  | .fst t => .letin (⟦ t ⟧ᵗ) (.fst (.force (.var 0)))
+  | .snd t => .letin (⟦ t ⟧ᵗ) (.snd (.force (.var 0)))
 end
 end
 
@@ -268,8 +268,8 @@ def transK : CBV.K → K
   | .case t u :: k => .letin (.case (.var 0)
                         (renameCom (lift succ) (⟦ t ⟧ᵗ))
                         (renameCom (lift succ) (⟦ u ⟧ᵗ))) :: (⟦ k ⟧ᴷ)
-  | .fst :: k      => .letin (.prjl (.force (.var 0))) :: (⟦ k ⟧ᴷ)
-  | .snd :: k      => .letin (.prjr (.force (.var 0))) :: (⟦ k ⟧ᴷ)
+  | .fst :: k      => .letin (.fst (.force (.var 0))) :: (⟦ k ⟧ᴷ)
+  | .snd :: k      => .letin (.snd (.force (.var 0))) :: (⟦ k ⟧ᴷ)
 end
 notation:40 "⟦" k:41 "⟧ᴷ" => transK k
 
@@ -300,8 +300,8 @@ theorem preservation {Γ A} :
         (.app (.force (.var (.there .here))) (.var .here)))
   case case ihs iht ihu =>
     exact .letin ihs (.case (.var .here) (wtWeakenCom₂ iht) (wtWeakenCom₂ ihu))
-  case fst ih => exact .letin ih (.prjl (.force (.var .here)))
-  case snd ih => exact .letin ih (.prjr (.force (.var .here)))
+  case fst ih => exact .letin ih (.fst (.force (.var .here)))
+  case snd ih => exact .letin ih (.snd (.force (.var .here)))
 
 /-* Translation commutes with renaming and substitution *-/
 
@@ -373,20 +373,20 @@ theorem simulation {t u k k'} (r : ⟨t, k⟩ ⤳ᵥ ⟨u, k'⟩) : ⟨⟦ t ⟧
       _ = _ := by
         rw [← substUnion, substDrop₂, ← transSubstCom, substComExt]
         intro n; cases n <;> rfl
-  case πl =>
+  case π1 =>
     simp
     calc
       _ ⤳ _ := Step.ζ
-      _ ⤳ _ := by simp; exact Step.prjl
+      _ ⤳ _ := by simp; exact Step.fst
       _ ⤳ _ := Step.π
-      _ ⤳ _ := Step.πl
-  case πr =>
+      _ ⤳ _ := Step.π1
+  case π2 =>
     simp
     calc
       _ ⤳ _ := Step.ζ
-      _ ⤳ _ := by simp; exact Step.prjr
+      _ ⤳ _ := by simp; exact Step.snd
       _ ⤳ _ := Step.π
-      _ ⤳ _ := Step.πr
+      _ ⤳ _ := Step.π2
   case app₁ => exact .once .letin
   case app₂ =>
     calc

@@ -55,7 +55,7 @@ theorem soundness {Γ} :
     exact ⟨_, .Sum hA₁ hA₂, .inr (.inr ⟨_, rfl, pv⟩)⟩
   case thunk ih =>
     let ⟨_, hB, pm⟩ := ih σ hσ
-    exact ⟨_, .U hB, hB.closure (.once .thunk) pm⟩
+    exact ⟨_, .U hB, hB.closure (.once .π) pm⟩
   case force ih =>
     let ⟨_, hUB, pv⟩ := ih σ hσ
     cases hUB with | U hB => exact ⟨_, hB, pv⟩
@@ -68,7 +68,7 @@ theorem soundness {Γ} :
     let r : app ((lam m)⦃σ⦄) v ⤳ m⦃v +: σ⦄ := by
       calc app ((lam m)⦃σ⦄) v
         _ = app (lam (m⦃⇑ σ⦄)) v := rfl
-        _ ⤳ m⦃⇑ σ⦄⦃v⦄            := .lam (hA.snVal pv)
+        _ ⤳ m⦃⇑ σ⦄⦃v⦄            := .β (hA.snVal pv)
         _ = (m⦃v +: σ⦄)          := by rw [← substUnion]
     exact hB.closure (.once r) pm
   case app ihm ihv =>
@@ -94,7 +94,7 @@ theorem soundness {Γ} :
         calc (letin m n)⦃σ⦄
           _ = letin (m⦃σ⦄) (n⦃⇑ σ⦄)    := rfl
           _ ⤳⋆ letin (.ret v) (n⦃⇑ σ⦄) := .letin r
-          _ ⤳ n⦃⇑ σ⦄⦃v⦄                := .ret (hA.snVal pv)
+          _ ⤳ n⦃⇑ σ⦄⦃v⦄                := .ζ (hA.snVal pv)
           _ = (n⦃v +: σ⦄)              := by rw [← substUnion]
       exact ⟨_, hB, hB.closure r' pn⟩
   case case v m n _ _ B _ _ _ ihv ihm ihn =>
@@ -113,7 +113,7 @@ theorem soundness {Γ} :
       let r : (case v m n)⦃σ⦄ ⤳ m⦃w +: σ⦄ := by
         calc (case v m n)⦃σ⦄
           _ = (case (inl w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄)) := by simp only [substCom]; rw [e]
-          _ ⤳ m⦃⇑ σ⦄⦃w⦄                        := .inl snv snn
+          _ ⤳ m⦃⇑ σ⦄⦃w⦄                        := .ι1 snv snn
           _ = (m⦃w +: σ⦄)                      := by rw [← substUnion]
       exact ⟨R, hB, hB.closure (.once r) rm⟩
     | .inr (.inr ⟨w, e, qv⟩) =>
@@ -122,32 +122,32 @@ theorem soundness {Γ} :
       let r' : (case v m n)⦃σ⦄ ⤳ n⦃w +: σ⦄ := by
         calc (case v m n)⦃σ⦄
           _ = case (inr w) (m⦃⇑ σ⦄) (n⦃⇑ σ⦄) := by simp only [substCom]; rw [e]
-          _ ⤳ n⦃⇑ σ⦄⦃w⦄                      := .inr snv snm
+          _ ⤳ n⦃⇑ σ⦄⦃w⦄                      := .ι2 snv snm
           _ = (n⦃w +: σ⦄)                    := by rw [← substUnion]
       exact ⟨R, hB, hB.closure (.once r') rm⟩
   case prod ihm ihn =>
     let ⟨_, hB₁, pm⟩ := ihm σ hσ
     let ⟨_, hB₂, pn⟩ := ihn σ hσ
     exact ⟨_, .Prod hB₁ hB₂, .inr ⟨_, _, .refl, pm, pn⟩⟩
-  case prjl m _ _ _ ihm =>
+  case fst m _ _ _ ihm =>
     let ⟨_, hProd, pm⟩ := ihm σ hσ
     cases hProd with | Prod hB₁ hB₂ =>
     match pm with
-    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₁, hB₁.closure (.prjl r) (hB₁.sneCom (.prjl sne))⟩
+    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₁, hB₁.closure (.fst r) (hB₁.sneCom (.fst sne))⟩
     | .inr ⟨n₁, n₂, r, pn₁, pn₂⟩ =>
-      let r' : prjl (m⦃σ⦄) ⤳⋆ n₁ := by
-        calc prjl (m⦃σ⦄)
-          _ ⤳⋆ prjl (prod n₁ n₂) := .prjl r
-          _ ⤳⋆ n₁                := .once (.prodl (hB₂.snCom pn₂))
+      let r' : fst (m⦃σ⦄) ⤳⋆ n₁ := by
+        calc fst (m⦃σ⦄)
+          _ ⤳⋆ fst (prod n₁ n₂) := .fst r
+          _ ⤳⋆ n₁                := .once (.π1 (hB₂.snCom pn₂))
       refine ⟨_, hB₁, hB₁.closure r' pn₁⟩
-  case prjr m _ _ _ ihm =>
+  case snd m _ _ _ ihm =>
     let ⟨_, hProd, pm⟩ := ihm σ hσ
     cases hProd with | Prod hB₁ hB₂ =>
     match pm with
-    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₂, hB₂.closure (.prjr r) (hB₂.sneCom (.prjr sne))⟩
+    | .inl ⟨_, r, sne⟩ => exact ⟨_, hB₂, hB₂.closure (.snd r) (hB₂.sneCom (.snd sne))⟩
     | .inr ⟨n₁, n₂, r, pn₁, pn₂⟩ =>
-      let r' : prjr (m⦃σ⦄) ⤳⋆ n₂ := by
-        calc prjr (m⦃σ⦄)
-          _ ⤳⋆ prjr (prod n₁ n₂) := .prjr r
-          _ ⤳⋆ n₂                := .once (.prodr (hB₁.snCom pn₁))
+      let r' : snd (m⦃σ⦄) ⤳⋆ n₂ := by
+        calc snd (m⦃σ⦄)
+          _ ⤳⋆ snd (prod n₁ n₂) := .snd r
+          _ ⤳⋆ n₂                := .once (.π2 (hB₁.snCom pn₁))
       refine ⟨_, hB₂, hB₂.closure r' pn₂⟩

@@ -45,8 +45,8 @@ inductive Com : Type where
   | letin : Com → Com → Com
   | case : Val → Com → Com → Com
   | prod : Com → Com → Com
-  | prjl : Com → Com
-  | prjr : Com → Com
+  | fst : Com → Com
+  | snd : Com → Com
 end
 open Val Com
 
@@ -111,8 +111,8 @@ def renameCom (ξ : Nat → Nat) : Com → Com
   | letin m n => letin (renameCom ξ m) (renameCom (lift ξ) n)
   | case v m n => case (renameVal ξ v) (renameCom (lift ξ) m) (renameCom (lift ξ) n)
   | prod m n => prod (renameCom ξ m) (renameCom ξ n)
-  | prjl m => prjl (renameCom ξ m)
-  | prjr m => prjr (renameCom ξ m)
+  | fst m => fst (renameCom ξ m)
+  | snd m => snd (renameCom ξ m)
 end
 
 -- Renaming extensionality
@@ -233,8 +233,8 @@ def substCom (σ : Nat → Val) : Com → Com
   | letin m n => letin (substCom σ m) (substCom (⇑ σ) n)
   | case v m n => case (substVal σ v) (substCom (⇑ σ) m) (substCom (⇑ σ) n)
   | prod m n => prod (substCom σ m) (substCom σ n)
-  | prjl m => prjl (substCom σ m)
-  | prjr m => prjr (substCom σ m)
+  | fst m => fst (substCom σ m)
+  | snd m => snd (substCom σ m)
 end
 notation:50 v "⦃" σ "⦄" => substVal σ v
 notation:50 m "⦃" σ "⦄" => substCom σ m
