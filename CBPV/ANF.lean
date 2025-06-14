@@ -1,8 +1,16 @@
+import CBPV.CK
 import CBPV.Typing
 
-open ValType ComType
+open Nat ValType ComType
+
+/-*--------------------------------
+  A-normal form of CBPV language:
+  syntax and typing
+--------------------------------*-/
 
 namespace ANF
+
+/-* Values, computations, and configurations *-/
 
 mutual
 inductive Val : Type where
@@ -17,6 +25,9 @@ inductive Com : Type where
   | lam : Cfg → Com
   | app : Com → Val → Com
   | ret : Val → Com
+  | prod : Cfg → Cfg → Com
+  | fst : Com → Com
+  | snd : Com → Com
 
 inductive Cfg : Type where
   | com : Com → Cfg
@@ -24,6 +35,8 @@ inductive Cfg : Type where
   | case : Val → Cfg → Cfg → Cfg
 end
 open Val Com Cfg
+
+/-* Renaming and substitution *-/
 
 mutual
 @[simp]
@@ -40,6 +53,9 @@ def renameCom (ξ : Nat → Nat) : Com → Com
   | lam m => lam (renameCfg (lift ξ) m)
   | app n v => app (renameCom ξ n) (renameVal ξ v)
   | ret v => ret (renameVal ξ v)
+  | prod m₁ m₂ => prod (renameCfg ξ m₁) (renameCfg ξ m₂)
+  | fst n => fst (renameCom ξ n)
+  | snd n => snd (renameCom ξ n)
 
 @[simp]
 def renameCfg (ξ : Nat → Nat) : Cfg → Cfg
@@ -57,11 +73,8 @@ theorem renameExt {ξ ζ} (h : ∀ x, ξ x = ζ x) :
   all_goals simp; try repeat' constructor
   all_goals apply_rules [liftExt]
 
-theorem renameValExt {ξ ζ v} (h : ∀ x, ξ x = ζ x) : renameVal ξ v = renameVal ζ v :=
-  (renameExt h).left v
-
-theorem renameCfgExt {ξ ζ m} (h : ∀ x, ξ x = ζ x) : renameCfg ξ m = renameCfg ζ m :=
-  (renameExt h).right.right m
+def renameValExt {ξ ζ : Nat → Nat} {v} (h : ∀ x, ξ x = ζ x) := (renameExt h).left v
+def renameCfgExt {ξ ζ : Nat → Nat} {m} (h : ∀ x, ξ x = ζ x) := (renameExt h).right.right m
 
 theorem renameComp {ξ ζ ς} (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   (∀ v, (renameVal ξ ∘ renameVal ζ) v = renameVal ς v) ∧
@@ -72,11 +85,41 @@ theorem renameComp {ξ ζ ς} (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   all_goals simp; try repeat' constructor
   all_goals apply_rules [liftComp]
 
-theorem renameValComp {ξ ζ ς v} (h : ∀ x, (ξ ∘ ζ) x = ς x) : renameVal ξ (renameVal ζ v) = renameVal ς v :=
-  (renameComp h).left v
+def renameValComp {ξ ζ ς : Nat → Nat} {v} (h : ∀ x, (ξ ∘ ζ) x = ς x) := (renameComp h).left v
+def renameCfgComp {ξ ζ ς : Nat → Nat} {v} (h : ∀ x, (ξ ∘ ζ) x = ς x) := (renameComp h).right.right v
 
-theorem renameCfgComp {ξ ζ ς m} (h : ∀ x, (ξ ∘ ζ) x = ς x) : renameCfg ξ (renameCfg ζ m) = renameCfg ς m :=
-  (renameComp h).right.right m
+@[simp]
+def up (σ : Nat → Val) : Nat → Val :=
+  var 0 +: (renameVal succ ∘ σ)
+prefix:95 "⇑" => up
+
+mutual
+@[simp]
+def substVal (σ : Nat → Val) : Val → Val
+  | var x => σ x
+  | unit => unit
+  | inl v => inl (substVal σ v)
+  | inr v => inr (substVal σ v)
+  | thunk m => thunk (substCfg σ m)
+
+@[simp]
+def substCom (σ : Nat → Val) : Com → Com
+  | force v => force (substVal σ v)
+  | lam m => lam (substCfg (⇑ σ) m)
+  | app n v => app (substCom σ n) (substVal σ v)
+  | ret v => ret (substVal σ v)
+  | prod m₁ m₂ => prod (substCfg σ m₁) (substCfg σ m₂)
+  | fst n => fst (substCom σ n)
+  | snd n => snd (substCom σ n)
+
+@[simp]
+def substCfg (σ : Nat → Val) : Cfg → Cfg
+  | com n => com (substCom σ n)
+  | letin n m => letin (substCom σ n) (substCfg (⇑ σ) m)
+  | case v m₁ m₂ => case (substVal σ v) (substCfg (⇑ σ) m₁) (substCfg (⇑ σ) m₂)
+end
+
+/-* Typing *-/
 
 section
 set_option hygiene false
@@ -122,6 +165,19 @@ inductive ComWt : Ctxt → Com → ComType → Prop where
     Γ ⊢ₐ v ∶ A →
     ---------------
     Γ ⊢ₐ ret v ∶ F A
+  | prod {Γ B₁ B₂} {m₁ m₂ : Cfg} :
+    Γ ⊢ₐ m₁ ∶ B₁ →
+    Γ ⊢ₐ m₂ ∶ B₂ →
+    ---------------------------
+    Γ ⊢ₐ prod m₁ m₂ ∶ Prod B₁ B₂
+  | fst {Γ B₁ B₂} {n : Com} :
+    Γ ⊢ₐ n ∶ Prod B₁ B₂ →
+    ---------------
+    Γ ⊢ₐ fst n ∶ B₁
+  | snd {Γ B₁ B₂} {n : Com} :
+    Γ ⊢ₐ n ∶ Prod B₁ B₂ →
+    ---------------
+    Γ ⊢ₐ snd n ∶ B₂
 
 inductive CfgWt : Ctxt → Cfg → ComType → Prop where
   | com {Γ B} {n : Com} :
@@ -145,7 +201,8 @@ end
 notation:40 Γ:41 "⊢ₐ" v:41 "∶" A:41 => ValWt Γ v A
 notation:40 Γ:41 "⊢ₐ" n:41 "∶" B:41 => ComWt Γ n B
 notation:40 Γ:41 "⊢ₐ" m:41 "∶" B:41 => CfgWt Γ m B
-end ANF
+
+/-* Renaming and weakening lemmas *-/
 
 theorem wtRenameA {ξ} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) :
   (∀ {v : ANF.Val} {A}, Γ ⊢ₐ v ∶ A → Δ ⊢ₐ ANF.renameVal ξ v ∶ A) ∧
@@ -164,29 +221,46 @@ theorem wtRenameCfg {ξ} {Γ Δ : Ctxt} {m : ANF.Cfg} {B} :
   Δ ⊢ ξ ∶ Γ → Γ ⊢ₐ m ∶ B → Δ ⊢ₐ ANF.renameCfg ξ m ∶ B :=
   λ hξ ↦ (wtRenameA hξ).right.right
 
-open Nat Val Com
+/-* The translation continuation and plugging into a continuation *-/
 
 inductive K : Type where
   | nil : K
   | app : ANF.Val → K → K
   | letin : ANF.Cfg → K
+  | fst : K → K
+  | snd : K → K
+
+@[simp]
+def plug (n : ANF.Com) : K → ANF.Cfg
+  | .nil => .com n
+  | .app v k => plug (.app n v) k
+  | .letin m => .letin n m
+  | .fst k => plug (.fst n) k
+  | .snd k => plug (.snd n) k
+notation:40 k:41 "[" n:41 "]" => plug n k
+
+/-* Renaming continuations *-/
 
 @[simp]
 def renameK (ξ : Nat → Nat) : K → K
   | .nil => .nil
   | .app v k => .app (ANF.renameVal ξ v) (renameK ξ k)
   | .letin m => .letin (ANF.renameCfg (lift ξ) m)
+  | .fst k => .fst (renameK ξ k)
+  | .snd k => .snd (renameK ξ k)
 
 theorem renameKExt {ξ ζ k} (h : ∀ x, ξ x = ζ x) : renameK ξ k = renameK ζ k := by
   induction k <;> simp [-lift]
   case app ih => exact ⟨ANF.renameValExt h, ih⟩
   case letin => exact ANF.renameCfgExt (liftExt ξ ζ h)
+  case fst ih | snd ih => exact ih
 
 theorem renameKComp' {ξ ζ ς k} (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   (renameK ξ ∘ renameK ζ) k = renameK ς k := by
   induction k <;> simp [-lift]
   case app ih => exact ⟨ANF.renameValComp h, ih⟩
   case letin => exact ANF.renameCfgComp (liftComp ξ ζ ς h)
+  case fst ih | snd ih => exact ih
 
 theorem renameKComp {ξ ζ k} : renameK ξ (renameK ζ k) = renameK (ξ ∘ ζ) k :=
   renameKComp' (λ _ ↦ rfl)
@@ -196,6 +270,12 @@ theorem renameKLiftSucc {ξ k} : renameK succ (renameK ξ k) = renameK (lift ξ)
     _ = renameK (succ ∘ ξ) k              := renameKComp
     _ = renameK (lift ξ ∘ succ) k         := by rw [← renameKExt (liftSucc ξ)]
     _ = renameK (lift ξ) (renameK succ k) := Eq.symm renameKComp
+
+theorem renamePlug {ξ n k} : ANF.renameCfg ξ (plug n k) = plug (ANF.renameCom ξ n) (renameK ξ k) := by
+  induction k generalizing n <;> simp
+  case app ih | fst ih | snd ih => simp [ih]
+
+/-* Typing continuations *-/
 
 section
 set_option hygiene false
@@ -214,8 +294,18 @@ inductive KWt : Ctxt → K → ComType → ComType → Prop where
     Γ ∷ A ⊢ₐ m ∶ B →
     ---------------------
     Γ ⊢ letin m ∶ F A ⇒ B
+  | fst {Γ k B₁ B₂ B₃} :
+    Γ ⊢ k ∶ B₁ ⇒ B₃ →
+    -----------------------------
+    Γ ⊢ fst k ∶ (Prod B₁ B₂) ⇒ B₃
+  | snd {Γ k B₁ B₂ B₃} :
+    Γ ⊢ k ∶ B₂ ⇒ B₃ →
+    -----------------------------
+    Γ ⊢ snd k ∶ (Prod B₁ B₂) ⇒ B₃
 end
 notation:40 Γ:41 "⊢" k:41 "∶" B₁:41 "⇒" B₂:41 => KWt Γ k B₁ B₂
+
+/-* Renaming and weakening lemmas for continuations *-/
 
 theorem wtRenameK {ξ} {Γ Δ : Ctxt} {k B₁ B₂}
   (hξ : Δ ⊢ ξ ∶ Γ) (h : Γ ⊢ k ∶ B₁ ⇒ B₂) : Δ ⊢ renameK ξ k ∶ B₁ ⇒ B₂ := by
@@ -226,23 +316,21 @@ theorem wtWeakenK {Γ k A B₁ B₂} :
   Γ ⊢ k ∶ B₁ ⇒ B₂ → Γ ∷ A ⊢ renameK succ k ∶ B₁ ⇒ B₂ :=
   wtRenameK wRenameSucc
 
-@[simp]
-def plug (n : ANF.Com) : K → ANF.Cfg
-  | .nil => .com n
-  | .app v k => plug (.app n v) k
-  | .letin m => .letin n m
-notation:40 k:41 "[" n:41 "]" => plug n k
-
-theorem plugWt {Γ k B₁ B₂} {n : ANF.Com}
+theorem wtPlug {Γ k B₁ B₂} {n : ANF.Com}
   (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ ⊢ₐ n ∶ B₁) : Γ ⊢ₐ (k [ n ]) ∶ B₂ := by
   induction hk generalizing n
   case nil => exact .com h
   case app hv _ hn => exact hn (.app h hv)
   case letin hm => exact .letin h hm
+  case fst hn => exact hn (.fst h)
+  case snd hn => exact hn (.snd h)
+end ANF
 
-theorem renamePlug {ξ n k} : ANF.renameCfg ξ (plug n k) = plug (ANF.renameCom ξ n) (renameK ξ k) := by
-  induction k generalizing n <;> simp
-  case app ih => simp [ih]
+/-*-----------------------------
+  A-normal translation of CBPV
+-----------------------------*-/
+
+open Val Com
 
 section
 set_option hygiene false
@@ -259,13 +347,16 @@ def Aval : Val → ANF.Val
   | thunk m => .thunk (⟦ m ⟧ₘ)
 
 @[simp]
-def Acom (k : K) : Com → ANF.Cfg
+def Acom (k : ANF.K) : Com → ANF.Cfg
   | force v => k [ .force (⟦ v ⟧ᵥ) ]
   | ret v   => k [ .ret (⟦ v ⟧ᵥ) ]
   | lam m   => k [ .lam (⟦ m ⟧ₘ) ]
   | app n v   => ⟦ n ⟧ₘ .app (⟦ v ⟧ᵥ) k
-  | letin n m => ⟦ n ⟧ₘ .letin (⟦ m ⟧ₘ (renameK succ k))
-  | case v m₁ m₂ => .case (⟦ v ⟧ᵥ) (⟦ m₁ ⟧ₘ (renameK succ k)) (⟦ m₂ ⟧ₘ (renameK succ k))
+  | letin n m => ⟦ n ⟧ₘ .letin (⟦ m ⟧ₘ (ANF.renameK succ k))
+  | case v m₁ m₂ => .case (⟦ v ⟧ᵥ) (⟦ m₁ ⟧ₘ (ANF.renameK succ k)) (⟦ m₂ ⟧ₘ (ANF.renameK succ k))
+  | prod m₁ m₂ => k [ .prod (⟦ m₁ ⟧ₘ) (⟦ m₂ ⟧ₘ) ]
+  | fst n => ⟦ n ⟧ₘ .fst k
+  | snd n => ⟦ n ⟧ₘ .snd k
   /- I think this is the A-normalization with join points?
   | case v m₁ m₂ =>
     .letin (.ret (.thunk (.com (.lam ((renameK succ k) [ .force (.var 0) ])))))
@@ -279,90 +370,200 @@ notation:40 "⟦" v:41 "⟧ᵥ" => Aval v
 notation:40 "⟦" m:41 "⟧ₘ" => Acom K.nil m
 notation:40 "⟦" m:41 "⟧ₘ" k:41 => Acom k m
 
+/-* Renaming commutes with A-normalization *-/
+
 theorem renameA {ξ} :
   (∀ v, (⟦ renameVal ξ v ⟧ᵥ) = ANF.renameVal ξ (⟦ v ⟧ᵥ)) ∧
-  (∀ m k, (⟦ renameCom ξ m ⟧ₘ (renameK ξ k)) = ANF.renameCfg ξ (⟦ m ⟧ₘ k)) := by
+  (∀ m k, (⟦ renameCom ξ m ⟧ₘ (ANF.renameK ξ k)) = ANF.renameCfg ξ (⟦ m ⟧ₘ k)) := by
   refine ⟨λ v ↦ ?val, λ m k ↦ ?com⟩
   mutual_induction v, m generalizing ξ
-  case val.var | val.unit => rfl
-  case val.inl ih | val.inr ih => simp [ih]
-  case val.thunk ih => simp; exact ih .nil
-  case com.force ih | com.ret ih => simp [ih, renamePlug]
-  case com.lam ih =>
+  case var | unit => rfl
+  case inl ih | inr ih => simp [ih]
+  case thunk ih => simp; exact ih .nil
+  case force ih | ret ih => simp [ih, ANF.renamePlug]
+  case lam ih =>
     have e := ih (ξ := lift ξ) .nil
-    simp [-lift] at *; rw [e]; simp [renamePlug]
-  case com.app ihm ihv => simp [-lift, ihv, ← ihm]
-  case com.letin ihn ihm =>
-    simp [-lift, ← ihn, ← ihm, renameKLiftSucc]
-  case com.case ihv ihm₁ ihm₂ =>
-    simp [-lift, ihv, ← ihm₁, ← ihm₂, renameKLiftSucc]
+    simp [-lift] at *; rw [e]; simp [ANF.renamePlug]
+  case app ihm ihv => simp [-lift, ihv, ← ihm]
+  case letin ihn ihm =>
+    simp [-lift, ← ihn, ← ihm, ANF.renameKLiftSucc]
+  case case ihv ihm₁ ihm₂ =>
+    simp [-lift, ihv, ← ihm₁, ← ihm₂, ANF.renameKLiftSucc]
+  case prod ihm₁ ihm₂ => simp [← ihm₁, ← ihm₂, ANF.renamePlug]
+  case fst ih | snd ih => simp [← ih]
 
 theorem renameAval {ξ v} : (⟦ renameVal ξ v ⟧ᵥ) = ANF.renameVal ξ (⟦ v ⟧ᵥ) := renameA.left v
-theorem renameAcom {ξ m k} : (⟦ renameCom ξ m ⟧ₘ (renameK ξ k)) = ANF.renameCfg ξ (⟦ m ⟧ₘ k) := renameA.right m k
+theorem renameAcom {ξ m k} : (⟦ renameCom ξ m ⟧ₘ (ANF.renameK ξ k)) = ANF.renameCfg ξ (⟦ m ⟧ₘ k) := renameA.right m k
 
-@[simp]
-def Asubst (σ : Nat → Val) : Nat → ANF.Val := λ x ↦ ⟦ σ x ⟧ᵥ
-notation:40 "⟦" σ:41 "⟧ₛ" => Asubst σ
-
-theorem Acons {σ v} : (⟦ v +: σ ⟧ₛ) = ((⟦ v ⟧ᵥ) +: (⟦ σ ⟧ₛ)) :=
-  funext (λ x ↦ by cases x <;> simp)
+/-* Translation is type preserving *-/
 
 theorem preservation {Γ} :
   (∀ {v} {A : ValType}, Γ ⊢ v ∶ A → Γ ⊢ₐ (⟦ v ⟧ᵥ) ∶ A) ∧
   (∀ {k m} {B₁ B₂ : ComType}, Γ ⊢ k ∶ B₁ ⇒ B₂ → Γ ⊢ m ∶ B₁ → Γ ⊢ₐ (⟦ m ⟧ₘ k) ∶ B₂) := by
   refine ⟨λ h ↦ ?val, λ hk h ↦ ?com⟩
   mutual_induction h, h
-  case val.var mem => exact .var mem
-  case val.unit => exact .unit
-  case val.inl h => exact .inl h
-  case val.inr h => exact .inr h
-  case val.thunk h => exact .thunk (h .nil)
-  case com.force h _ _ => exact (plugWt hk (.force h))
-  case com.ret h _ _ => exact (plugWt hk (.ret h))
-  case com.lam h _ _ => exact (plugWt hk (.lam (h .nil)))
-  case com.app hn hv k _ => exact hn (.app hv hk)
-  case com.letin hn hm _ _ => exact hn (.letin (hm (wtWeakenK hk)))
-  case com.case hv hm₁ hm₂ _ _ => exact .case hv (hm₁ (wtWeakenK hk)) (hm₂ (wtWeakenK hk))
+  case var mem => exact .var mem
+  case unit => exact .unit
+  case inl h => exact .inl h
+  case inr h => exact .inr h
+  case thunk h => exact .thunk (h .nil)
+  case force h _ _ => exact (ANF.wtPlug hk (.force h))
+  case ret h _ _ => exact (ANF.wtPlug hk (.ret h))
+  case lam h _ _ => exact (ANF.wtPlug hk (.lam (h .nil)))
+  case app hn hv k _ => exact hn (.app hv hk)
+  case letin hn hm _ _ => exact hn (.letin (hm (ANF.wtWeakenK hk)))
+  case case hv hm₁ hm₂ _ _ => exact .case hv (hm₁ (ANF.wtWeakenK hk)) (hm₂ (ANF.wtWeakenK hk))
+  case prod hm₁ hm₂ _ _ => exact ANF.wtPlug hk (.prod (hm₁ .nil) (hm₂ .nil))
+  case fst h _ _ => exact h (.fst hk)
+  case snd h _ _ => exact h (.snd hk)
+
+/-*----------------------------
+  CK machine semantics of ANF
+----------------------------*-/
+
+namespace ANF
 
 inductive F : Type where
   | app : Val → F
-  | letin : Com → F
+  | letin : Cfg → F
+  | fst : F
+  | snd : F
+open F
 
-inductive Fₐ : Type where
-  | app : ANF.Val → Fₐ
-  | letin : ANF.Cfg → Fₐ
+def Kₐ := List F
+def CK := Cfg × Kₐ
 
 @[simp]
-def FK : List F → K
+def renameKₐ (ξ : Nat → Nat) : Kₐ → Kₐ
+  | [] => []
+  | .app v :: k => .app (renameVal ξ v) :: renameKₐ ξ k
+  | .letin m :: k => .letin (renameCfg (lift ξ) m) :: renameKₐ ξ k
+  | .fst :: k => fst :: renameKₐ ξ k
+  | .snd :: k => snd :: renameKₐ ξ k
+
+@[simp]
+def KKₐ : K → Kₐ
+  | .nil => []
+  | .app v k => .app v :: KKₐ k
+  | .letin m => [.letin m]
+  | .fst k => .fst :: KKₐ k
+  | .snd k => .snd :: KKₐ k
+notation:40 "⟦" k:41 "⟧ₖ" => KKₐ k
+
+theorem renameKKₐ {k} (ξ : Nat → Nat) : (⟦ ANF.renameK ξ k ⟧ₖ) = renameKₐ ξ (⟦ k ⟧ₖ) := by
+  induction k <;> simp <;> congr
+
+section
+set_option hygiene false
+local infix:40 "⤳" => Step
+inductive Step : CK → CK → Prop where
+  | π {m k} :        ⟨.com (.force (.thunk m)), k⟩   ⤳ ⟨m, k⟩
+  | β {m v k} :      ⟨.com (.lam m), .app v :: k⟩    ⤳ ⟨substCfg (v +: .var) m, k⟩
+  | ζ {v m k} :      ⟨.com (.ret v), .letin m :: k⟩  ⤳ ⟨substCfg (v +: .var) m, k⟩
+  | ιl {v m₁ m₂ k} : ⟨.case (.inl v) m₁ m₂, k⟩       ⤳ ⟨substCfg (v +: .var) m₁, k⟩
+  | ιr {v m₁ m₂ k} : ⟨.case (.inr v) m₁ m₂, k⟩       ⤳ ⟨substCfg (v +: .var) m₂, k⟩
+  | π1 {m₁ m₂ k} :   ⟨.com (.prod m₁ m₂), .fst :: k⟩ ⤳ ⟨m₁, k⟩
+  | π2 {m₁ m₂ k} :   ⟨.com (.prod m₁ m₂), .snd :: k⟩ ⤳ ⟨m₂, k⟩
+  | app {n v k} :    ⟨.com (.app n v), k⟩            ⤳ ⟨.com n, .app v :: k⟩
+  | letin {n m k} :  ⟨.letin n m, k⟩                 ⤳ ⟨.com n, .letin m :: k⟩
+  | fst {n k} :      ⟨.com (.fst n), k⟩              ⤳ ⟨.com n, .fst :: k⟩
+  | snd {n k} :      ⟨.com (.snd n), k⟩              ⤳ ⟨.com n, .snd :: k⟩
+end
+infix:40 "⤳" => Step
+
+@[reducible] def Steps := RTC Step
+infix:40 "⤳⋆"  => Steps
+
+end ANF
+
+/-* Translating continuations *-/
+
+@[simp]
+def KKₐ : K → ANF.Kₐ
+  | [] => []
+  | .app v :: k => .app (⟦ v ⟧ᵥ) :: KKₐ k
+  | .letin m :: k => .letin (⟦ m ⟧ₘ .nil) :: KKₐ k
+  | .fst :: k => .fst :: KKₐ k
+  | .snd :: k => .snd :: KKₐ k
+notation:40 "⟦" k:41 "⟧ₖ" => KKₐ k
+
+theorem renameKKₐ {k} (ξ : Nat → Nat) : (⟦ renameK ξ k ⟧ₖ) = ANF.renameKₐ ξ (⟦ k ⟧ₖ) := by
+  induction k
+  case nil => simp
+  case cons f _ ih =>
+    cases f <;> simp [-lift]
+    case app => congr; exact renameAval
+    case letin =>
+      have e : ANF.K.nil = ANF.renameK (lift ξ) ANF.K.nil := rfl
+      congr; rw [e]; exact renameAcom
+    case fst | snd => simp [ih]
+
+/-
+@[simp]
+def FK : K → ANF.K
   | [] => .nil
   | .app v :: fs => .app (⟦ v ⟧ᵥ) (FK fs)
-  | .letin m :: fs => .letin (⟦ m ⟧ₘ renameK succ (FK fs))
+  | .letin m :: fs => .letin (⟦ m ⟧ₘ ANF.renameK succ (FK fs))
+  | _ => sorry
 
-@[simp]
-def KFₐ : K → List Fₐ
-  | .nil => []
-  | .app v k => .app v :: KFₐ k
-  | .letin m => [.letin m]
-
-@[simp]
-def renameF (ξ : Nat → Nat) : List F → List F
-  | [] => []
-  | .app v :: fs => .app (renameVal ξ v) :: renameF ξ fs
-  | .letin m :: fs => .letin (renameCom (lift ξ) m) :: renameF ξ fs
-
-@[simp]
-def renameFₐ (ξ : Nat → Nat) : List Fₐ → List Fₐ
-  | [] => []
-  | .app v :: fs => .app (ANF.renameVal ξ v) :: renameFₐ ξ fs
-  | .letin m :: fs => .letin (ANF.renameCfg (lift ξ) m) :: renameFₐ ξ fs
-
-theorem renameFK {fs} (ξ : Nat → Nat) : FK (renameF ξ fs) = renameK ξ (FK fs) := by
+theorem renameFK {fs} (ξ : Nat → Nat) : FK (renameK ξ fs) = ANF.renameK ξ (FK fs) := by
   induction fs
   case nil => simp
   case cons f _ ih =>
     cases f <;> simp [-lift]
     case app => exact ⟨renameAval, ih⟩
-    case letin => rw [ih, renameKLiftSucc, renameAcom]
+    case letin => rw [ih, ANF.renameKLiftSucc, renameAcom]
+-/
+
+/-* Composing continuations *-/
+
+@[simp]
+def compKCfg (k : ANF.K) : ANF.Cfg → ANF.Cfg
+  | .com n => ANF.plug n k
+  | .letin n m => .letin n (compKCfg (ANF.renameK succ k) m)
+  | .case v m₁ m₂ => .case v (compKCfg (ANF.renameK succ k) m₁) (compKCfg (ANF.renameK succ k) m₂)
+
+@[simp]
+def compKK (k : ANF.K) : ANF.K → ANF.K
+  | .nil => k
+  | .app v k' => .app v (compKK k k')
+  | .letin m => .letin (compKCfg (ANF.renameK succ k) m)
+  | .fst k' => .fst (compKK k k')
+  | .snd k' => .snd (compKK k k')
+
+theorem renameCompKCfg {ξ m k} : ANF.renameCfg ξ (compKCfg k m) = compKCfg (ANF.renameK ξ k) (ANF.renameCfg ξ m) := by
+  mutual_induction m generalizing ξ k
+  case com => simp [ANF.renamePlug]
+  case letin ih => simp [ih, ANF.renameKLiftSucc]
+  case case ihm₁ ihm₂ => simp [ihm₁, ihm₂, ANF.renameKLiftSucc]
+
+theorem renameCompKK {ξ k₁ k₂} : ANF.renameK ξ (compKK k₁ k₂) = compKK (ANF.renameK ξ k₁) (ANF.renameK ξ k₂) := by
+  induction k₂
+  case nil => simp
+  case app ih | fst ih | snd ih => simp [ih]
+  case letin => simp [ANF.renameKLiftSucc, renameCompKCfg]
+
+theorem compPlug {n k₁ k₂} : compKCfg k₁ (k₂ [ n ]) = ((compKK k₁ k₂) [ n ]) := by
+  induction k₂ generalizing n <;> apply_assumption
+
+theorem compA {m k₁ k₂} : compKCfg k₁ (⟦ m ⟧ₘ k₂) = (⟦ m ⟧ₘ (compKK k₁ k₂)) := by
+  mutual_induction m generalizing k₁ k₂
+  case force | lam | ret => exact compPlug
+  case app ih | fst ih | snd ih => simp [ih]
+  case letin ihn ihm => simp [ihn, ihm, renameCompKK]
+  case case ihm₁ ihm₂ => simp [ihm₁, ihm₂, renameCompKK]
+  case prod ihm₁ ihm₂ => simp [ihm₁, ihm₂, compPlug]
+
+/-
+@[simp]
+def Asubst (σ : Nat → Val) : Nat → ANF.Val := λ x ↦ ⟦ σ x ⟧ᵥ
+notation:40 "⟦" σ:41 "⟧ₛ" => Asubst σ
+
+theorem Alookup {σ x} : (⟦ σ x ⟧ᵥ) = (⟦ σ ⟧ₛ) x := by
+  cases x <;> simp
+
+theorem Acons {σ v} : (⟦ v +: σ ⟧ₛ) = ((⟦ v ⟧ᵥ) +: (⟦ σ ⟧ₛ)) :=
+  funext (λ x ↦ by cases x <;> simp)
 
 def CEK := Com × (Nat → Val) × List F
 def ACEK := ANF.Cfg × (Nat → ANF.Val) × List Fₐ
@@ -410,15 +611,17 @@ end
 notation:40 acek:41 "⤳ₐ" acek':41 => aeval acek acek'
 notation:40 acek:41 "⤳ₐ⋆" acek':41 => aevals acek acek'
 
-theorem aeval.aevals {acek acek'} (r : acek ⤳ₐ acek'): acek ⤳ₐ⋆ acek' := .trans r .refl
+theorem compositionality' {m σ fs k} : ⟨k [ m ], σ, fs⟩ ⤳ₐ⋆ ⟨.com m, σ, KFₐ k ++ fs⟩ := by
+  induction k generalizing m
+  case nil => exact .refl
+  case app ih => exact .trans' ih aeval.app.aevals
+  case letin => exact aeval.letin.aevals
 
-theorem aevals.trans' {acek₁ acek₂ acek₃} (r : acek₁ ⤳ₐ⋆ acek₂) (r' : acek₂ ⤳ₐ⋆ acek₃) : acek₁ ⤳ₐ⋆ acek₃ := by
-  induction r
-  case refl => assumption
-  case trans => constructor <;> apply_rules
-
-instance : Trans aevals aevals aevals where
-  trans := .trans'
+theorem compositionality {m k σ fs} : ⟨compKCfg k m, σ, fs⟩ ⤳ₐ⋆ ⟨m, σ, KFₐ k ++ fs⟩ := by
+  mutual_induction m
+  case com => exact compositionality'
+  case letin ih => simp; refine .trans .letin ?_; sorry
+  case case ihm₁ ihm₂ => simp; sorry
 
 theorem equivalence {m m' σ σ' fs fs'} (r : ⟨m, σ, fs⟩ ⤳ ⟨m', σ', fs'⟩) :
   ∀ fsₐ, ∃ fsₐ', ⟨⟦ m ⟧ₘ (FK fs), ⟦ σ ⟧ₛ, fsₐ⟩ ⤳ₐ⋆ ⟨⟦ m' ⟧ₘ (FK fs'), ⟦ σ' ⟧ₛ, fsₐ'⟩ := by
@@ -427,12 +630,47 @@ theorem equivalence {m m' σ σ' fs fs'} (r : ⟨m, σ, fs⟩ ⤳ ⟨m', σ', fs
   induction r
   all_goals injection e with em e; injection e with eσ ef; subst em eσ ef
   all_goals injection e' with em' e'; injection e' with eσ' ef'; subst em' eσ' ef'
-  case force => simp; exists fsₐ; sorry
-  case force' => simp; exists fsₐ; sorry
-  case lam => rw [Acons]; simp; exists renameFₐ succ fsₐ; sorry
+  case force =>
+    simp; exists fsₐ
+    refine .trans' compositionality' ?_
+    refine .trans .force ?_
+    have e : FK fs' = compKK (FK fs') .nil := by rfl
+    rw [e, ← compA, ← e]
+    sorry
+  case force' =>
+    simp; exists fsₐ
+    refine .trans' compositionality' ?_
+    refine .trans .force' ?_
+    rw [Alookup]
+    sorry
+  case lam fs _ =>
+    rw [Acons]; simp; exists renameFₐ succ fsₐ
+    refine .trans' compositionality' ?_
+    refine .trans .app ?_
+    refine .trans .lam ?_
+    have e : FK (renameF succ fs) = compKK (FK (renameF succ fs)) .nil := by rfl
+    rw [e, ← compA]
+    sorry
   case app => exact ⟨_, .refl⟩
   case ret v => rw [Acons, renameFK]; exact ⟨_, .trans .letin (.trans .ret .refl)⟩
   case letin => simp; exists fsₐ; exact .refl
   case case₁ => rw [Acons, renameFK]; exact ⟨_, .trans .case₁ .refl⟩
   case case₂ => rw [Acons, renameFK]; exact ⟨_, .trans .case₂ .refl⟩
   case case' => exact ⟨_, aeval.case'.aevals⟩
+
+theorem equivalence' {m m' σ σ' fs fs'} (r : ⟨m, σ, fs⟩ ⤳ ⟨m', σ', fs'⟩) :
+  ⟨⟦ m ⟧ₘ .nil, ⟦ σ ⟧ₛ, FFₐ fs⟩ ⤳ₐ⋆ ⟨⟦ m' ⟧ₘ .nil, ⟦ σ' ⟧ₛ, FFₐ fs'⟩ := by
+  generalize e : (m, σ, fs) = cek, e' : (m', σ', fs') = cek' at r
+  induction r
+  all_goals injection e with em e; injection e with eσ ef; subst em eσ ef
+  all_goals injection e' with em' e'; injection e' with eσ' ef'; subst em' eσ' ef'
+  all_goals try rw [Acons, renameFFₐ]
+  case force | force' | lam | ret | case₁ | case₂ | case' =>
+    apply aeval.aevals; constructor
+  case app v =>
+    have e : K.app (⟦ v ⟧ᵥ) .nil = compKK (K.app (⟦ v ⟧ᵥ) .nil) .nil := rfl
+    simp; rw [e, ← compA]; exact compositionality
+  case letin m =>
+    have e : K.letin (⟦ m ⟧ₘ .nil) = compKK (K.letin (⟦ m ⟧ₘ .nil)) .nil := rfl
+    simp; rw [e, ← compA]; exact compositionality
+-/
