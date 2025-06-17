@@ -627,33 +627,13 @@ def SK : S → ANF.K
   | .snd :: k => .snd (SK k)
 
 @[simp]
-def KSₐ : ANF.K → ANF.Sₐ
-  | .nil => []
-  | .app v k => .app v :: KSₐ k
-  | .letin m => [.letin m]
-  | .fst k => .fst :: KSₐ k
-  | .snd k => .snd :: KSₐ k
-notation:40 "⟦" k:41 "⟧ₖₛ" => KSₐ k
-
-@[simp]
 def SSₐ : S → ANF.Sₐ
   | [] => []
   | .app v :: k => .app (⟦ v ⟧ᵥ) :: SSₐ k
-  | .letin m :: k => [.letin (⟦ m ⟧ₘ (ANF.renameK succ (SK k)))]
+  | .letin m :: k => .letin (⟦ m ⟧ₘ) :: SSₐ k
   | .fst :: k => .fst :: SSₐ k
   | .snd :: k => .snd :: SSₐ k
 notation:40 "⟦" k:41 "⟧ₛₛ" => SSₐ k
-
-theorem SKSₐ {k} : (⟦ SK k ⟧ₖₛ) = (⟦ k ⟧ₛₛ) := by
-  induction k
-  case nil => rfl
-  case cons f _ ih =>
-    cases f
-    case letin => simp
-    all_goals simp [ih]
-
-theorem renameKSₐ {k} (ξ : Nat → Nat) : (⟦ ANF.renameK ξ k ⟧ₖₛ) = ANF.renameKₐ ξ (⟦ k ⟧ₖₛ) := by
-  induction k <;> simp <;> congr
 
 theorem renameSK {k} (ξ : Nat → Nat) : SK (renameS ξ k) = ANF.renameK ξ (SK k) := by
   induction k
@@ -666,6 +646,61 @@ theorem renameSSₐ {k} (ξ : Nat → Nat) : (⟦ renameS ξ k ⟧ₛₛ) = ANF.
   case nil => simp
   case cons f _ ih =>
     cases f <;> simp [-lift, ih, renameAval, ← renameAcom, ← ANF.renameKLiftSucc, renameSK]
+
+/-* Translation preserves machine semantics *-/
+
+theorem loopK₁ {f : CK.F} {k : S} (e : f :: k = k) : False := by
+  induction k generalizing f
+  case nil => injection e
+  case cons ih => injection e with _ e; exact ih e
+
+theorem loopK₂ {f₁ f₂ : CK.F} {k : S} (e : f₁ :: f₂ :: k = k) : False := by
+  induction k generalizing f₁ f₂
+  case nil => injection e
+  case cons ih => injection e with _ e; exact ih e
+
+theorem CKeqv₁ {m₁ m₂ f} {k : S} (r : ⟨m₁, f :: k⟩ ⤳ ⟨m₂, k⟩) : ⟨⟦ m₁ ⟧ₘ, ⟦ f :: k ⟧ₛₛ⟩ ⤳ ⟨⟦ m₂ ⟧ₘ, ⟦ k ⟧ₛₛ⟩ := by
+  generalize e : f :: k = k' at r
+  cases r
+  all_goals try cases loopK₁ e
+  all_goals try cases loopK₂ e
+  all_goals injection e with ef ek; subst ef; clear ek
+  case β m v =>
+    calc ⟨.com (.lam (⟦ m ⟧ₘ .nil)), .app (⟦ v ⟧ᵥ) :: (⟦ k ⟧ₛₛ)⟩
+      _ ⤳ ⟨ANF.substCfg ((⟦ v ⟧ᵥ) +: .var) (⟦ m ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩ := .β
+      _ = ⟨ANF.substCfg (⟦ v +: .var ⟧ₛ) (⟦ m ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩   := by rw [ANF.substCfgExt (λ n ↦ ?_)]; cases n <;> rfl
+      _ = ⟨⟦ m⦃v⦄ ⟧ₘ .nil, ⟦ k ⟧ₛₛ⟩                                := by rw [← substAcom]; rfl
+  case ζ v m =>
+    calc ⟨.com (.ret (⟦ v ⟧ᵥ)), .letin (⟦ m ⟧ₘ) :: (⟦ k ⟧ₛₛ)⟩
+      _ ⤳ ⟨ANF.substCfg ((⟦ v ⟧ᵥ) +: .var) (⟦ m ⟧ₘ), ⟦ k ⟧ₛₛ⟩ := .ζ
+      _ = ⟨ANF.substCfg (⟦ v +: .var ⟧ₛ) (⟦ m ⟧ₘ), ⟦ k ⟧ₛₛ⟩   := by rw [ANF.substCfgExt (λ n ↦ ?_)]; cases n <;> rfl
+      _ = ⟨⟦ m⦃v⦄ ⟧ₘ .nil, ⟦ k ⟧ₛₛ⟩                           := by rw [← substAcom]; rfl
+  case π1 | π2 => constructor
+
+theorem CKeqv₂ {m₁ m₂} {k : S} (r : ⟨m₁, k⟩ ⤳ ⟨m₂, k⟩) : ⟨⟦ m₁ ⟧ₘ, ⟦ k ⟧ₛₛ⟩ ⤳ ⟨⟦ m₂ ⟧ₘ, ⟦ k ⟧ₛₛ⟩ := by
+  generalize e : (m₂, k) = ck₂ at r
+  cases r
+  all_goals injection e with em ek; subst em
+  all_goals try cases loopK₁ ek
+  all_goals try cases loopK₁ (Eq.symm ek)
+  case π => constructor
+  case ιl v m₁ m₂ =>
+    calc ⟨.case (.inl (⟦ v ⟧ᵥ)) (⟦ m₁ ⟧ₘ .nil) (⟦ m₂ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩
+      _ ⤳ ⟨ANF.substCfg ((⟦ v ⟧ᵥ) +: .var) (⟦ m₁ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩ := .ιl
+      _ = ⟨ANF.substCfg (⟦ v +: .var ⟧ₛ) (⟦ m₁ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩   := by rw [ANF.substCfgExt (λ n ↦ ?_)]; cases n <;> rfl
+      _ = ⟨⟦ m₁⦃v⦄ ⟧ₘ .nil, ⟦ k ⟧ₛₛ⟩                                := by rw [← substAcom]; rfl
+  case ιr v m₁ m₂ =>
+    calc ⟨.case (.inr (⟦ v ⟧ᵥ)) (⟦ m₁ ⟧ₘ .nil) (⟦ m₂ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩
+      _ ⤳ ⟨ANF.substCfg ((⟦ v ⟧ᵥ) +: .var) (⟦ m₂ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩ := .ιr
+      _ = ⟨ANF.substCfg (⟦ v +: .var ⟧ₛ) (⟦ m₂ ⟧ₘ .nil), ⟦ k ⟧ₛₛ⟩   := by rw [ANF.substCfgExt (λ n ↦ ?_)]; cases n <;> rfl
+      _ = ⟨⟦ m₂⦃v⦄ ⟧ₘ .nil, ⟦ k ⟧ₛₛ⟩                                := by rw [← substAcom]; rfl
+
+theorem CKeqv₃ {m₁ m₂ f} {k : S} (r : ⟨m₁, k⟩ ⤳ ⟨m₂, f :: k⟩) : (⟦ m₁ ⟧ₘ SK k) = (⟦ m₂ ⟧ₘ SK (f :: k)) := by
+  generalize e : f :: k = k' at r
+  cases r
+  all_goals try cases loopK₁ e
+  all_goals try cases loopK₂ e
+  all_goals rfl
 
 /-* Composing continuations *-/
 
@@ -707,16 +742,6 @@ theorem compA {m k₁ k₂} : compKCfg k₁ (⟦ m ⟧ₘ k₂) = (⟦ m ⟧ₘ 
   case case ihm₁ ihm₂ => simp [ihm₁, ihm₂, renameCompKK]
   case prod ihm₁ ihm₂ => simp [ihm₁, ihm₂, compPlug]
 -/
-
-/-* Translation preserves machine semantics *-/
-
-theorem compositionality {m} {k : ANF.K} : ⟨k [ m ], .nil⟩ ⤳⋆ ⟨.com m, ⟦ k ⟧ₖₛ⟩ := by
-  induction k generalizing m
-  case nil => exact .refl
-  case app ih => exact Trans.trans ih ANF.Step.app
-  case letin => exact .once .letin
-  case fst ih => exact Trans.trans ih ANF.Step.fst
-  case snd ih => exact Trans.trans ih ANF.Step.snd
 
 /-
 @[simp]
