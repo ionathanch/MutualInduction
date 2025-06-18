@@ -23,7 +23,7 @@ def 𝒞 (B : ComType) (m : Com) : Prop :=
   | .Prod B₁ B₂ => ∃ n₁ n₂, ℰ B₁ n₁ ∧ ℰ B₂ n₂ ∧ m = prod n₁ n₂
 
 @[simp]
-def ℰ (B : ComType) (m : Com) := ∃ n, m ⇓ n ∧ 𝒞 B n
+def ℰ (B : ComType) (m : Com) := ∃ n, m ⇓ₙ n ∧ 𝒞 B n
 end
 notation:40 v:41 "∈" "⟦" A:41 "⟧ᵛ" => 𝒱 A v
 notation:40 m:41 "∈" "⟦" B:41 "⟧ᶜ" => 𝒞 B m

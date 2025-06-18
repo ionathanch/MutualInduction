@@ -57,7 +57,7 @@ namespace Big
 
 section
 set_option hygiene false
-local infix:40 (priority := 1001) "⇓" => BStep
+local infix:40 "⇓" => BStep
 inductive BStep : Com → Com → Prop where
   | lam {m} : .lam m ⇓ .lam m
   | ret {v} : .ret v ⇓ .ret v
@@ -95,7 +95,7 @@ inductive BStep : Com → Com → Prop where
     -----------
     .snd n ⇓ t
 end
-infix:40 (priority := 1001) "⇓" => BStep
+infix:40 "⇓" => BStep
 
 @[simp]
 def isTerminal : Com → Prop

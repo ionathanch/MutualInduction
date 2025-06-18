@@ -95,7 +95,7 @@ theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   all_goals intro r; cases r
 
 def Norm (m n : Com) := m ⇒⋆ n ∧ nf n
-infix:40 "⇓" => Norm
+infix:40 "⇓ₙ" => Norm
 
 /-*---------------------
   Strong normalization

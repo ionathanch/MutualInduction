@@ -61,15 +61,15 @@ Remaining proof files show interesting properties of CBPV.
         ╭──────────RTC──────┬─────────╮
         ├───────┬──Syntax───┼─────────┤
         │       │           │         │
-        ▼       ▼           ▼         ▼
+        ╽       ╽           ╽         ╽
 Evaluation    Typing    NormalInd    Reduction
   │   │       │ │  │        │  │         │    
-  │   ▼       ▼ │  │        ▼  ╰─────────│─────► LeftmostOutermost
-  │   CK ─► CBV │  │  OpenSemantics      │       Antisubstitution
+  │   ╽       ╽ │  │        ╽  ╰─────────│─────╼ LeftmostOutermost
+  │   CK ─╼ CBV │  │  OpenSemantics      │       Antisubstitution
   │         CBN │  │    │                │
-  ▼             ▼  ▼    ▼                ▼
+  ╽             ╽  ╽    ╽                ╽
   ClosedSemantics  Soundness         NormalAcc
                           │           │
-                          ▼           ▼
+                          ╽           ╽
                           Normalization
 ```
