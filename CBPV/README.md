@@ -26,6 +26,8 @@ The structure of the proofs begins with the usual basics.
 * Typing.lean: Typing rules, renaming, and weakening
 * Evaluation.lean: Evaluation of (closed) commands,
   which doesn't evaluate under binders and branches
+* CK.lean: CK machine semantics, with soundness and completeness
+  with respect to evaluation
 * Reduction.lean: Small-step reduction semantics for values and commands,
   which reduces everywhere to normal form
 
@@ -61,13 +63,13 @@ Remaining proof files show interesting properties of CBPV.
         │       │           │         │
         ▼       ▼           ▼         ▼
 Evaluation    Typing    NormalInd    Reduction
-   │          │ │  │        │  │         │    
-   ▼          ▼ │  │        ▼  ╰─────────│─────► LeftmostOutermost
-ClosedSemantics │  │  OpenSemantics      │       Antisubstitution
-                │  │    │                │
-                ▼  ▼    ▼                ▼
-              CBV  Soundness         NormalAcc
-              CBN         │           │
+  │   │       │ │  │        │  │         │    
+  │   ▼       ▼ │  │        ▼  ╰─────────│─────► LeftmostOutermost
+  │   CK ─► CBV │  │  OpenSemantics      │       Antisubstitution
+  │         CBN │  │    │                │
+  ▼             ▼  ▼    ▼                ▼
+  ClosedSemantics  Soundness         NormalAcc
+                          │           │
                           ▼           ▼
                           Normalization
 ```

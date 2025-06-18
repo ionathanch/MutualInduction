@@ -14,8 +14,8 @@ inductive Eval : Com → Com → Prop where
   | π {m} : force (thunk m) ⇒ m
   | β {m v} : app (lam m) v ⇒ m⦃v⦄
   | ζ {v m} : letin (ret v) m ⇒ m⦃v⦄
-  | ι1 {v m n} : case (inl v) m n ⇒ m⦃v⦄
-  | ι2 {v m n} : case (inr v) m n ⇒ n⦃v⦄
+  | ιl {v m n} : case (inl v) m n ⇒ m⦃v⦄
+  | ιr {v m n} : case (inr v) m n ⇒ n⦃v⦄
   | π1 {m n} : fst (prod m n) ⇒ m
   | π2 {m n} : snd (prod m n) ⇒ n
   | app {m m' v} :

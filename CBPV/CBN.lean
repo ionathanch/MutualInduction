@@ -1,7 +1,7 @@
 import CBPV.Typing
 import CBPV.CK
 
-open Nat
+open Nat CK
 
 namespace CBN
 

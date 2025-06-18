@@ -121,11 +121,11 @@ theorem soundness {Γ} :
     | .inl ⟨v, hv, e⟩ =>
       let hm := ihm (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hm
-      exact ℰbwd (.once .ι1) hm
+      exact ℰbwd (.once .ιl) hm
     | .inr ⟨v, hv, e⟩ =>
       let hn := ihn (v +: σ) (semCtxtCons hv hσ)
       simp only [substCom]; rw [e]; rw [substUnion] at hn
-      exact ℰbwd (.once .ι2) hn
+      exact ℰbwd (.once .ιr) hn
   case prod m n _ _ _ _ ihm ihn =>
     simp at ihm ihn
     let ⟨_, ⟨rm, _⟩, hm⟩ := ihm σ hσ
