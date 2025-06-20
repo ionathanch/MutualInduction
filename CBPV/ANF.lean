@@ -849,6 +849,17 @@ instance : Trans EqCom EqCom EqCom where
 instance : Trans EqCfg EqCfg EqCfg where
   trans := .trans
 
+theorem EqCfg.eqCom {n₁ n₂} (e : .com n₁ ≡ₘ .com n₂) : n₁ ≡ₙ n₂ := by
+  generalize e₁ : Cfg.com n₁ = m₁ at e
+  generalize e₂ : Cfg.com n₂ = m₂ at e
+  mutual_induction e generalizing n₁ n₂
+  case letin | case | ζ | ιl | ιr => injection e₁
+  case com => injection e₁ with e₁; injection e₂ with e₂; subst e₁ e₂; assumption
+  case sym ih => subst e₁ e₂; exact .sym (ih rfl rfl)
+  case trans h₁ h₂ ih₂ ih₁ => sorry
+  all_goals injection e₁ with e; subst e; try subst e₂
+  all_goals sorry -- {com n}! ≡ₙ n, etc. do not hold
+
 theorem EqCom.plug {n₁ n₂ k} (e : n₁ ≡ₙ n₂) : (k [ n₁ ]) ≡ₘ (k [ n₂ ]) := by
   induction k generalizing n₁ n₂
   case' app ih | fst ih | snd ih => apply ih
@@ -856,7 +867,7 @@ theorem EqCom.plug {n₁ n₂ k} (e : n₁ ≡ₙ n₂) : (k [ n₁ ]) ≡ₘ (k
 
 theorem EqCom.compK {n m k} (e : .com n ≡ₘ m) : (k [ n ]) ≡ₘ compKCfg k m := by
   mutual_induction m generalizing n k
-  case com => apply EqCom.plug; sorry
+  case com => exact e.eqCom.plug
   case letin => simp; sorry
   case case ihm₁ ihm₂ => simp; sorry
 
