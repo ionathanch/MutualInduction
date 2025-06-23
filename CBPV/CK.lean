@@ -99,11 +99,6 @@ inductive BStep : Com → Com → Prop where
 end
 infix:40 "⇓" => BStep
 
-@[simp]
-def isTerminal : Com → Prop
-  | lam _ | ret _ | prod _ _ => True
-  | _ => False
-
 end Big
 
 namespace Eq
@@ -253,13 +248,13 @@ theorem evalBigs {m n t} (r : m ⇒⋆ n) : n ⇓ t → m ⇓ t := by
   case refl => exact r
   case trans r' _ ih => exact evalBig r' (ih r)
 
-theorem bigTerminal {t} (h : isTerminal t) : t ⇓ t := by
-  mutual_induction t generalizing h
-  all_goals simp at h
+theorem bigNf {t} (nt : nf t) : t ⇓ t := by
+  mutual_induction t generalizing nt
+  all_goals simp at nt
   all_goals constructor
 
-theorem evalStep {m t} (h : isTerminal t) (r : m ⇒⋆ t) : ⟨m, []⟩ ⤳⋆ ⟨t, []⟩ :=
-  stepBig (evalBigs r (bigTerminal h))
+theorem evalStep {m t} (nt : nf t) (r : m ⇒⋆ t) : ⟨m, []⟩ ⤳⋆ ⟨t, []⟩ :=
+  stepBig (evalBigs r (bigNf nt))
 
 /-* CK machine is sound wrt equational theory *-/
 

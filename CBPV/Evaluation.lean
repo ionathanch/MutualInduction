@@ -88,7 +88,7 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
 @[simp]
 def nf : Com → Prop
   | lam _ | ret _ | prod _ _ => True
-  | force _ | .app _ _ | letin _ _ | case _ _ _ | fst _ | snd _ => False
+  | force _ | app _ _ | letin _ _ | case _ _ _ | fst _ | snd _ => False
 
 theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *
