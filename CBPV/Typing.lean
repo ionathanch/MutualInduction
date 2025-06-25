@@ -86,6 +86,10 @@ theorem wtRename {ξ} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) :
   mutual_induction h, h generalizing ξ Δ
   all_goals constructor <;> apply_rules [wRenameLift]
 
+theorem wtRenameVal {ξ} {Γ Δ : Ctxt} {v} {A : ValType} :
+  Δ ⊢ ξ ∶ Γ → Γ ⊢ v ∶ A → Δ ⊢ renameVal ξ v ∶ A :=
+  λ hξ ↦ (wtRename hξ).left
+
 theorem wtRenameCom {ξ} {Γ Δ : Ctxt} {m} {B : ComType} :
   Δ ⊢ ξ ∶ Γ → Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B :=
   λ hξ ↦ (wtRename hξ).right

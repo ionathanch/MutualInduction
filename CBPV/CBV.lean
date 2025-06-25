@@ -314,7 +314,7 @@ theorem transRename {ξ} :
   case unit => rfl
   case lam ih | inl ih | inr ih | val ih | fst ih | snd ih => simp [ih]
   case pair ihv ihw => simp [ihv, ihw]
-  case app iht ihu => simp [iht, ← ihu, renameLiftRename]
+  case app iht ihu => simp [iht, ← ihu, renameLiftRenameCom]
   case case ihs iht ihu =>
     simp [-lift, ihs, ← iht, ← ihu, renameLiftLiftRename]; rfl
 

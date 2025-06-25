@@ -94,8 +94,23 @@ theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *
   all_goals intro r; cases r
 
-def Norm (m n : Com) := m ⇒⋆ n ∧ nf n
+theorem nfSteps {m n} (nfm : nf m) (r : m ⇒⋆ n) : m = n := by
+  cases r
+  case refl => rfl
+  case trans r _ => cases nfStepn't nfm r
+
+@[reducible] def Norm (m n : Com) := m ⇒⋆ n ∧ nf n
 infix:40 "⇓ₙ" => Norm
+
+@[refl] theorem Norm.refl {m} (nfm : nf m) : m ⇓ₙ m := by exists .refl
+
+theorem Norm.bwd {m m' n} (r : m ⇒⋆ m') : m' ⇓ₙ n → m ⇓ₙ n
+  | ⟨rn, nfn⟩ => ⟨.trans' r rn, nfn⟩
+
+theorem Norm.join {m n₁ n₂} : m ⇓ₙ n₁ → m ⇓ₙ n₂ → n₁ = n₂
+  | ⟨rn₁, nfn₁⟩, ⟨rn₂, nfn₂⟩ =>
+    let ⟨n', rn₁', rn₂'⟩ := confluence rn₁ rn₂
+    by rw [nfSteps nfn₁ rn₁', nfSteps nfn₂ rn₂']
 
 /-*---------------------
   Strong normalization

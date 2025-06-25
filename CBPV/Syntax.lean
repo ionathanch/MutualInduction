@@ -143,7 +143,7 @@ def renameValId := renameId.left
 def renameComId := renameId.right
 
 -- Renamings compose
-theorem renameComp' ξ ζ ς (h : ∀ x, (ξ ∘ ζ) x = ς x) :
+theorem renameComp ξ ζ ς (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   (∀ v, (renameVal ξ ∘ renameVal ζ) v = renameVal ς v) ∧
   (∀ m, (renameCom ξ ∘ renameCom ζ) m = renameCom ς m) := by
   refine ⟨λ v ↦ ?val, λ m ↦ ?comp⟩
@@ -152,10 +152,10 @@ theorem renameComp' ξ ζ ς (h : ∀ x, (ξ ∘ ζ) x = ς x) :
   all_goals apply_rules [liftComp]
 
 def renameValComp ξ ζ v : renameVal ξ (renameVal ζ v) = renameVal (ξ ∘ ζ) v :=
-  (renameComp' ξ ζ (ξ ∘ ζ) (λ _ ↦ rfl)).left v
+  (renameComp ξ ζ (ξ ∘ ζ) (λ _ ↦ rfl)).left v
 
-def renameComComp ξ ζ v : renameCom ξ (renameCom ζ v) = renameCom (ξ ∘ ζ) v :=
-  (renameComp' ξ ζ (ξ ∘ ζ) (λ _ ↦ rfl)).right v
+def renameComComp ξ ζ m : renameCom ξ (renameCom ζ m) = renameCom (ξ ∘ ζ) m :=
+  (renameComp ξ ζ (ξ ∘ ζ) (λ _ ↦ rfl)).right m
 
 /-*----------------------
   Lifting substitutions
@@ -379,7 +379,13 @@ theorem substVar σ x m : substCom (var x +: σ) m = renameCom (x +: id) (substC
     _ = substCom (var x +: var) (substCom (⇑ σ) m) := substUnion σ (var x) m
     _ = renameCom (x +: id) (substCom (⇑ σ) m)     := substToRename x _
 
-theorem renameLiftRename ξ m : renameCom succ (renameCom ξ m) = renameCom (lift ξ) (renameCom succ m) := by
+theorem renameLiftRenameVal ξ v : renameVal succ (renameVal ξ v) = renameVal (lift ξ) (renameVal succ v) := by
+  calc renameVal succ (renameVal ξ v)
+    _ = renameVal (succ ∘ ξ) v                := by rw [renameValComp]
+    _ = renameVal (lift ξ ∘ succ) v           := by rw [renameValExt]; exact liftSucc ξ
+    _ = renameVal (lift ξ) (renameVal succ v) := by rw [← renameValComp]
+
+theorem renameLiftRenameCom ξ m : renameCom succ (renameCom ξ m) = renameCom (lift ξ) (renameCom succ m) := by
   calc renameCom succ (renameCom ξ m)
     _ = renameCom (succ ∘ ξ) m                := by rw [renameComComp]
     _ = renameCom (lift ξ ∘ succ) m           := by rw [renameComExt]; exact liftSucc ξ
