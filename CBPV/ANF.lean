@@ -806,6 +806,7 @@ inductive EqCom : Com → Com → Prop
   | prod {m₁ m₂ n₁ n₂} : m₁ ≡ₘ n₁ → m₂ ≡ₘ n₂ → .prod m₁ m₂ ≡ₙ .prod n₁ n₂
   | fst {m n} : m ≡ₙ n → .fst m ≡ₙ .fst n
   | snd {m n} : m ≡ₙ n → .snd m ≡ₙ .snd n
+  | com {m n} : .com m ≡ₘ .com n → m ≡ₙ n
   | sym {m n} : n ≡ₙ m → m ≡ₙ n
   | trans {m n p} : m ≡ₙ n → n ≡ₙ p → m ≡ₙ p
 
@@ -849,27 +850,28 @@ instance : Trans EqCom EqCom EqCom where
 instance : Trans EqCfg EqCfg EqCfg where
   trans := .trans
 
-theorem EqCfg.eqCom {n₁ n₂} (e : .com n₁ ≡ₘ .com n₂) : n₁ ≡ₙ n₂ := by
-  generalize e₁ : Cfg.com n₁ = m₁ at e
-  generalize e₂ : Cfg.com n₂ = m₂ at e
-  mutual_induction e generalizing n₁ n₂
-  case letin | case | ζ | ιl | ιr => injection e₁
-  case com => injection e₁ with e₁; injection e₂ with e₂; subst e₁ e₂; assumption
-  case sym ih => subst e₁ e₂; exact .sym (ih rfl rfl)
-  case trans h₁ h₂ ih₂ ih₁ => sorry
-  all_goals injection e₁ with e; subst e; try subst e₂
-  all_goals sorry -- {com n}! ≡ₙ n, etc. do not hold
-
 theorem EqCom.plug {n₁ n₂ k} (e : n₁ ≡ₙ n₂) : (k [ n₁ ]) ≡ₘ (k [ n₂ ]) := by
   induction k generalizing n₁ n₂
   case' app ih | fst ih | snd ih => apply ih
   all_goals constructor; assumption; try rfl
 
+theorem EqCfg.compK {m₁ m₂ k} (e : m₁ ≡ₘ m₂) : compKCfg k m₁ ≡ₘ compKCfg k m₂ := by
+  mutual_induction e generalizing k
+  case com e => exact (EqCom.plug e)
+  case letin ih => simp; constructor; assumption; exact ih
+  case case ih₁ ih₂ => simp; constructor; assumption; exact ih₁; exact ih₂
+  case β => simp; sorry
+  all_goals sorry
+
 theorem EqCom.compK {n m k} (e : .com n ≡ₘ m) : (k [ n ]) ≡ₘ compKCfg k m := by
   mutual_induction m generalizing n k
-  case com => exact e.eqCom.plug
-  case letin => simp; sorry
-  case case ihm₁ ihm₂ => simp; sorry
+  case com => exact (EqCom.com e).plug
+  all_goals induction k generalizing n
+  case app ih => simp at *; sorry
+  case letin ih => simp at *; sorry
+  case case.letin ih => simp at *; sorry
+  case case.fst ih => simp at *; sorry
+  all_goals sorry
 
 end ANF
 
@@ -971,8 +973,9 @@ theorem stepTerminal {t} :
   all_goals assumption
 
 theorem StepCfg.compK {m : Cfg} {n t : Com} {k} (h : ∀ t, m ⇓ t → n ⇓ t) (b : compKCfg k m ⇓ t) : (k [ n ]) ⇓ t := by
-  mutual_induction n generalizing m t
-  case app => sorry
+  mutual_induction m generalizing n t k
+  all_goals induction k generalizing n t
+  case letin.app => simp at *; sorry
   all_goals sorry
 end ANF
 
