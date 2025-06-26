@@ -253,11 +253,11 @@ theorem semKletin {Γ n m k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ
     simp [-semCom, -lift]
     sorry -- let commutes with let
   case fst hk ih =>
-    apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- fst commutes with let
+    apply semCom.trans (semPlug hk (fstLet h)) (ih ?_)
+    sorry -- fst commutes with let
   case snd hk ih =>
-    apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- snd commutes with let
+    apply semCom.trans (semPlug hk (sndLet h)) (ih ?_)
+    sorry -- snd commutes with let
 
 theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ ⊢ case v m₁ m₂ ∶ B₁) :
   Γ ⊨ (k [case v m₁ m₂]) ~ case v ((renameK succ k) [m₁]) ((renameK succ k) [m₂]) ∶ B₂ := by

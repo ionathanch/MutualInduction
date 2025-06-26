@@ -325,7 +325,7 @@ theorem appLet {Γ n m v A B}
   let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
   let ⟨_, m₂, _, rm₂, _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).lam_inv
   have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ lam m₂ := calc
-    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := .let rw₂
+    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := rw₂.let
     _ ⇒  m⦃w₂ +: τ⦄ := by rw [substUnion]; exact .ζ
     _ ⇒⋆ lam m₂ := rm₂
   let ⟨_, rlam₁, rlam₂⟩ := confluence r₂ rlet
@@ -333,13 +333,63 @@ theorem appLet {Γ n m v A B}
   clear rlet rlam₁ rlam₂
   have r₂' : letin (n⦃τ⦄) (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄))
       ⇒⋆ n₂⦃v⦃τ⦄⦄ := calc
-    _ ⇒⋆ letin (ret w₂) (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄)) := .let rw₂
+    _ ⇒⋆ letin (ret w₂) (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄)) := rw₂.let
     _ ⇒  (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄))⦃w₂⦄ := .ζ
     _ = app (m⦃w₂ +: τ⦄) (v⦃τ⦄)
       := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
     _ ⇒⋆ app (lam n₂) (v⦃τ⦄) := rm₂.app
     _ ⇒  n₂⦃v⦃τ⦄⦄ := .β
   exact ℰ.bwds r₁' r₂' (hB _ _ (soundVal hv σ τ hστ))
+
+theorem fstLet {Γ n m B₁ B₂}
+  (hlet : Γ ⊢ letin n m ∶ Prod B₁ B₂) :
+  Γ ⊨ fst (letin n m) ~ letin n (fst m) ∶ B₁ := by
+  intro σ τ hστ
+  let ⟨n₁, _, n₂, _, r₁, r₂, hB₁⟩ := (soundCom hlet σ τ hστ).fst
+  have r₁' : fst ((letin n m)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.fst (.once .π1)
+  simp only [substCom] at *
+  cases hlet with case letin A' hn hm =>
+  let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
+  let ⟨m₁, _, m₂, _, _, r₂', _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).fst
+  have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ prod m₂ _ := calc
+    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := rw₂.let
+    _ ⇒  m⦃w₂ +: τ⦄              := by rw [substUnion]; exact .ζ
+    _ ⇒⋆ prod m₂ _               := r₂'
+  let ⟨_, rprod₁, rprod₂⟩ := confluence r₂ rlet
+  rw [← rprod₂.prod_inv] at rprod₁; injection rprod₁.prod_inv with e₁ e₂; subst e₁ e₂
+  clear rlet rprod₁ rprod₂
+  have r₂' : letin (n⦃τ⦄) (fst (m⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
+    _ ⇒⋆ letin (ret w₂) (fst (m⦃⇑ τ⦄)) := rw₂.let
+    _ ⇒  fst (m⦃⇑ τ⦄⦃w₂⦄)              := .ζ
+    _ =  fst (m⦃w₂ +: τ⦄)              := by rw [← substUnion]
+    _ ⇒⋆ fst (prod n₂ _)               := r₂'.fst
+    _ ⇒  n₂                            := .π1
+  exact ℰ.bwds r₁' r₂' hB₁
+
+theorem sndLet {Γ n m B₁ B₂}
+  (hlet : Γ ⊢ letin n m ∶ Prod B₁ B₂) :
+  Γ ⊨ snd (letin n m) ~ letin n (snd m) ∶ B₂ := by
+  intro σ τ hστ
+  let ⟨_, n₁, _, n₂, r₁, r₂, hB₂⟩ := (soundCom hlet σ τ hστ).snd
+  have r₁' : snd ((letin n m)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.snd (.once .π2)
+  simp only [substCom] at *
+  cases hlet with case letin A' hn hm =>
+  let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
+  let ⟨m₁, _, m₂, _, _, r₂', _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).fst
+  have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ prod m₂ _ := calc
+    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := rw₂.let
+    _ ⇒  m⦃w₂ +: τ⦄              := by rw [substUnion]; exact .ζ
+    _ ⇒⋆ prod m₂ _               := r₂'
+  let ⟨_, rprod₁, rprod₂⟩ := confluence r₂ rlet
+  rw [← rprod₂.prod_inv] at rprod₁; injection rprod₁.prod_inv with e₁ e₂; subst e₁ e₂
+  clear rlet rprod₁ rprod₂
+  have r₂' : letin (n⦃τ⦄) (snd (m⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
+    _ ⇒⋆ letin (ret w₂) (snd (m⦃⇑ τ⦄)) := rw₂.let
+    _ ⇒  snd (m⦃⇑ τ⦄⦃w₂⦄)              := .ζ
+    _ =  snd (m⦃w₂ +: τ⦄)              := by rw [← substUnion]
+    _ ⇒⋆ snd (prod _ n₂)               := r₂'.snd
+    _ ⇒  n₂                            := .π2
+  exact ℰ.bwds r₁' r₂' hB₂
 
 theorem appCase {Γ v w m₁ m₂ A B}
   (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B)
