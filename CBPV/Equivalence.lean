@@ -313,6 +313,34 @@ def soundCom {Γ m} {B : ComType} : Γ ⊢ m ∶ B → Γ ⊨ m ~ m ∶ B := sou
   Various commuting equivalences
 -------------------------------*-/
 
+theorem appLet {Γ n m v A B}
+  (hlet : Γ ⊢ letin n m ∶ Arr A B)
+  (hv : Γ ⊢ v ∶ A) :
+  Γ ⊨ app (letin n m) v ~ letin n (app m (renameVal succ v)) ∶ B := by
+  intro σ τ hστ
+  let ⟨n₁, n₂, r₁, r₂, hB⟩ := (soundCom hlet σ τ hστ).lam_inv
+  have r₁' : app ((letin n m)⦃σ⦄) (v⦃σ⦄) ⇒⋆ n₁⦃v⦃σ⦄⦄ := .trans' r₁.app (.once .β)
+  simp only [substCom] at *
+  cases hlet with case letin A' hn hm =>
+  let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
+  let ⟨_, m₂, _, rm₂, _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).lam_inv
+  have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ lam m₂ := calc
+    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := .let rw₂
+    _ ⇒  m⦃w₂ +: τ⦄ := by rw [substUnion]; exact .ζ
+    _ ⇒⋆ lam m₂ := rm₂
+  let ⟨_, rlam₁, rlam₂⟩ := confluence r₂ rlet
+  rw [← rlam₂.lam_inv] at rlam₁; injection rlam₁.lam_inv with e; subst e
+  clear rlet rlam₁ rlam₂
+  have r₂' : letin (n⦃τ⦄) (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄))
+      ⇒⋆ n₂⦃v⦃τ⦄⦄ := calc
+    _ ⇒⋆ letin (ret w₂) (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄)) := .let rw₂
+    _ ⇒  (app (m⦃⇑ τ⦄) (renameVal succ v⦃⇑ τ⦄))⦃w₂⦄ := .ζ
+    _ = app (m⦃w₂ +: τ⦄) (v⦃τ⦄)
+      := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
+    _ ⇒⋆ app (lam n₂) (v⦃τ⦄) := rm₂.app
+    _ ⇒  n₂⦃v⦃τ⦄⦄ := .β
+  exact ℰ.bwds r₁' r₂' (hB _ _ (soundVal hv σ τ hστ))
+
 theorem appCase {Γ v w m₁ m₂ A B}
   (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B)
   (hw : Γ ⊢ w ∶ A) :
@@ -334,10 +362,11 @@ theorem appCase {Γ v w m₁ m₂ A B}
     have r₂' :
       case (.inl v₂) (app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄)) (app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄))
         ⇒⋆ n₂⦃w⦃τ⦄⦄ := calc
-      _ ⇒⋆ app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .once .ιl
-      _ =  app (m₁⦃v₂ +: τ⦄) (w⦃τ⦄)                    := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
-      _ ⇒⋆ app (lam n₂) (w⦃τ⦄)                         := r₂'.app
-      _ ⇒  n₂⦃w⦃τ⦄⦄                                    := .β
+      _ ⇒  app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .ιl
+      _ =  app (m₁⦃v₂ +: τ⦄) (w⦃τ⦄)
+        := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
+      _ ⇒⋆ app (lam n₂) (w⦃τ⦄) := r₂'.app
+      _ ⇒  n₂⦃w⦃τ⦄⦄ := .β
     exact ℰ.bwds r₁' r₂' (hB₁ _ _ (soundVal hw σ τ hστ))
   | .inr ⟨v₁, v₂, hA₂, e₁, e₂⟩ =>
     rw [e₂]; rw [e₂] at r₂
@@ -349,10 +378,11 @@ theorem appCase {Γ v w m₁ m₂ A B}
     have r₂' :
       case (.inr v₂) (app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄)) (app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄))
         ⇒⋆ n₂⦃w⦃τ⦄⦄ := calc
-      _ ⇒⋆ app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .once .ιr
-      _ =  app (m₂⦃v₂ +: τ⦄) (w⦃τ⦄)                    := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
-      _ ⇒⋆ app (lam n₂) (w⦃τ⦄)                         := r₂'.app
-      _ ⇒  n₂⦃w⦃τ⦄⦄                                    := .β
+      _ ⇒  app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .ιr
+      _ =  app (m₂⦃v₂ +: τ⦄) (w⦃τ⦄)
+        := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
+      _ ⇒⋆ app (lam n₂) (w⦃τ⦄) := r₂'.app
+      _ ⇒  n₂⦃w⦃τ⦄⦄ := .β
     exact ℰ.bwds r₁' r₂' (hB₁ _ _ (soundVal hw σ τ hστ))
 
 theorem fstCase {Γ v m₁ m₂ B₁ B₂}
@@ -374,7 +404,7 @@ theorem fstCase {Γ v m₁ m₂ B₁ B₂}
     clear rprod₁ rprod₂ r' r₁; clear r'
     have r₂' :
       case (inl v₂) (fst (m₁⦃⇑ τ⦄)) (fst (m₂⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
-      _ ⇒⋆ fst (m₁⦃⇑ τ⦄)⦃v₂⦄ := .once .ιl
+      _ ⇒  fst (m₁⦃⇑ τ⦄)⦃v₂⦄ := .ιl
       _ =  fst (m₁⦃v₂ +: τ⦄) := by simp only [substCom]; rw [← substUnion]
       _ ⇒⋆ fst (prod n₂ _)   := r₂'.fst
       _ ⇒ n₂                 := .π1
@@ -388,7 +418,7 @@ theorem fstCase {Γ v m₁ m₂ B₁ B₂}
     clear rprod₁ rprod₂ r' r₁; clear r'
     have r₂' :
       case (inr v₂) (fst (m₁⦃⇑ τ⦄)) (fst (m₂⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
-      _ ⇒⋆ fst (m₂⦃⇑ τ⦄)⦃v₂⦄ := .once .ιr
+      _ ⇒  fst (m₂⦃⇑ τ⦄)⦃v₂⦄ := .ιr
       _ =  fst (m₂⦃v₂ +: τ⦄) := by simp only [substCom]; rw [← substUnion]
       _ ⇒⋆ fst (prod n₂ _)   := r₂'.fst
       _ ⇒ n₂                 := .π1
@@ -413,7 +443,7 @@ theorem sndCase {Γ v m₁ m₂ B₁ B₂}
     clear rprod₁ rprod₂ r' r₁; clear r'
     have r₂' :
       case (inl v₂) (snd (m₁⦃⇑ τ⦄)) (snd (m₂⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
-      _ ⇒⋆ snd (m₁⦃⇑ τ⦄)⦃v₂⦄ := .once .ιl
+      _ ⇒  snd (m₁⦃⇑ τ⦄)⦃v₂⦄ := .ιl
       _ =  snd (m₁⦃v₂ +: τ⦄) := by simp only [substCom]; rw [← substUnion]
       _ ⇒⋆ snd (prod _ n₂)   := r₂'.snd
       _ ⇒ n₂                 := .π2
@@ -427,7 +457,7 @@ theorem sndCase {Γ v m₁ m₂ B₁ B₂}
     clear rprod₁ rprod₂ r' r₁; clear r'
     have r₂' :
       case (inr v₂) (snd (m₁⦃⇑ τ⦄)) (snd (m₂⦃⇑ τ⦄)) ⇒⋆ n₂ := calc
-      _ ⇒⋆ snd (m₂⦃⇑ τ⦄)⦃v₂⦄ := .once .ιr
+      _ ⇒  snd (m₂⦃⇑ τ⦄)⦃v₂⦄ := .ιr
       _ =  snd (m₂⦃v₂ +: τ⦄) := by simp only [substCom]; rw [← substUnion]
       _ ⇒⋆ snd (prod _ n₂)   := r₂'.snd
       _ ⇒ n₂                 := .π2

@@ -246,9 +246,9 @@ theorem semKletin {Γ n m k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ
   Γ ⊨ (k [letin n m]) ~ letin n ((renameK succ k) [m]) ∶ B₂ := by
   induction hk generalizing n m
   case nil => exact soundCom h
-  case app hk ih =>
-    apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- app commutes with let
+  case app hv hk ih =>
+    apply semCom.trans (semPlug hk (appLet h hv)) (ih ?_)
+    sorry -- app commutes with let
   case letin hm =>
     simp [-semCom, -lift]
     sorry -- let commutes with let
