@@ -143,6 +143,7 @@ def 𝒦.snd {k₁ k₂ B₁ B₂ B₃} (h : (k₁, k₂) ∈ ⟦B₂ ⇒ B₃�
 @[reducible, simp] def semK Γ k₁ k₂ B₁ B₂ := ∀ σ τ, Γ ⊨ σ ~ τ → (substK σ k₁, substK τ k₂) ∈ ⟦B₁ ⇒ B₂⟧ᵏ
 notation:40 Γ:41 "⊨" k₁:41 "~" k₂:41 "∶" B₁:41 "⇒" B₂:41 => semK Γ k₁ k₂ B₁ B₂
 
+def semK.nil {Γ B} : Γ ⊨ .nil ~ .nil ∶ B ⇒ B := λ _ _ _ ↦ 𝒦.nil
 def semK.fst {Γ k₁ k₂ B₁ B₂ B₃} (h : Γ ⊨ k₁ ~ k₂ ∶ B₁ ⇒ B₃) : Γ ⊨ .fst k₁ ~ .fst k₂ ∶ Prod B₁ B₂ ⇒ B₃ :=
   λ σ τ hστ ↦ 𝒦.fst (h σ τ hστ)
 def semK.snd {Γ k₁ k₂ B₁ B₂ B₃} (h : Γ ⊨ k₁ ~ k₂ ∶ B₂ ⇒ B₃) : Γ ⊨ .snd k₁ ~ .snd k₂ ∶ Prod B₁ B₂ ⇒ B₃ :=
@@ -366,3 +367,13 @@ theorem soundA {Γ} :
   case inl ih => exact 𝒱.inl (ih σ τ hστ)
   case inr ih => exact 𝒱.inr (ih σ τ hστ)
   case thunk ih => exact 𝒱.thunk (ih .nil (soundK .nil) σ τ hστ)
+
+theorem soundAnil {Γ m} {B : ComType} (h : Γ ⊢ m ∶ B) : Γ ⊨ m ~ ⟦m⟧ₘ ∶ B :=
+  soundA.right h .nil .nil
+
+theorem retUnitA {m} (h : ⬝ ⊢ m ∶ F Unit) : ⟦m⟧ₘ ⇒⋆ ret unit := by
+  let hm := soundAnil h var var semCtxt.nil
+  rw [substComId, substComId] at hm
+  unfold ℰ 𝒞 𝒱 at hm
+  let ⟨_, _, _, ⟨r, _⟩, ⟨_, _, ⟨eu₁, eu₂⟩, eret₁, eret₂⟩⟩ := hm
+  subst eu₁ eu₂ eret₁ eret₂; exact r
