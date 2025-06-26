@@ -55,8 +55,8 @@ theorem substRenameK {ξ σ k} : substK σ (renameK ξ k) = substK (σ ∘ ξ) k
 section
 set_option hygiene false
 open K
-local notation:40 Γ:41 "⊢" k:41 "∶" B₁:41 "⇒" B₂:41 => KWt Γ k B₁ B₂
-inductive KWt : Ctxt → K → ComType → ComType → Prop where
+local notation:40 Γ:41 "⊢" k:41 "∶" B₁:41 "⇒" B₂:41 => wtK Γ k B₁ B₂
+inductive wtK : Ctxt → K → ComType → ComType → Prop where
   | nil {Γ B} :
     ---------------
     Γ ⊢ nil ∶ B ⇒ B
@@ -78,17 +78,17 @@ inductive KWt : Ctxt → K → ComType → ComType → Prop where
     -----------------------------
     Γ ⊢ snd k ∶ (Prod B₁ B₂) ⇒ B₃
 end
-notation:40 Γ:41 "⊢" k:41 "∶" B₁:41 "⇒" B₂:41 => KWt Γ k B₁ B₂
+notation:40 Γ:41 "⊢" k:41 "∶" B₁:41 "⇒" B₂:41 => wtK Γ k B₁ B₂
 
-theorem wtRenameK {ξ k B₁ B₂} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) (h : Γ ⊢ k ∶ B₁ ⇒ B₂) :
+theorem wtK.rename {ξ k B₁ B₂} {Γ Δ : Ctxt} (hξ : Δ ⊢ ξ ∶ Γ) (h : Γ ⊢ k ∶ B₁ ⇒ B₂) :
   Δ ⊢ renameK ξ k ∶ B₁ ⇒ B₂ := by
   induction h generalizing ξ Δ
   all_goals constructor <;> apply_rules [wtRenameVal, wtRenameCom, wRenameLift]
 
-theorem wtWeakenK {Γ k A B₁ B₂} : Γ ⊢ k ∶ B₁ ⇒ B₂ → Γ ∷ A ⊢ renameK succ k ∶ B₁ ⇒ B₂ :=
-  wtRenameK wRenameSucc
+theorem wtK.weaken {Γ k A B₁ B₂} : Γ ⊢ k ∶ B₁ ⇒ B₂ → Γ ∷ A ⊢ renameK succ k ∶ B₁ ⇒ B₂ :=
+  wtK.rename wRenameSucc
 
-theorem wtPlug {Γ n k B₁ B₂}
+theorem wtK.plug {Γ n k B₁ B₂}
   (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ ⊢ n ∶ B₁) : Γ ⊢ (k [ n ]) ∶ B₂ := by
   induction hk generalizing n
   case nil => exact h
@@ -323,7 +323,8 @@ notation:1022 "⟦" m "⟧ₘ" k => Acom k m
 
 theorem soundA {Γ} :
   (∀ {v} {A : ValType}, Γ ⊢ v ∶ A → Γ ⊨ v ~ ⟦v⟧ᵥ ∶ A) ∧
-  (∀ {m k₁ k₂} {B₁ B₂ : ComType}, Γ ⊢ m ∶ B₁ → Γ ⊢ k₁ ∶ B₁ ⇒ B₂ → Γ ⊨ k₁ ~ k₂ ∶ B₁ ⇒ B₂ → Γ ⊨ (k₁[m]) ~ ⟦m⟧ₘ k₂ ∶ B₂) := by
+  (∀ {m k₁ k₂} {B₁ B₂ : ComType}, Γ ⊢ m ∶ B₁ → Γ ⊢ k₁ ∶ B₁ ⇒ B₂ →
+    Γ ⊨ k₁ ~ k₂ ∶ B₁ ⇒ B₂ → Γ ⊨ (k₁[m]) ~ ⟦m⟧ₘ k₂ ∶ B₂) := by
   refine ⟨λ h ↦ ?val, λ h wtk hk ↦ ?com⟩
   mutual_induction h, h
   case force ih _ _ _ =>
@@ -335,30 +336,30 @@ theorem soundA {Γ} :
     refine hk.plug (λ σ τ hστ ↦ ℰ.lam (λ v w hA ↦ ?_))
     rw [← substUnion, ← substUnion]
     exact ih .nil (soundK .nil) (v +: σ) (w +: τ) (semCtxt.cons hA hστ)
-  case app hv ihm ihv k₁ k₂ _ => exact ihm (.app hv wtk) (semK.app ihv hk)
+  case app hv ihm ihv k₁ k₂ _ => exact ihm (.app hv wtk) (.app ihv hk)
   case ret ih _ _ _ => exact hk.plug (λ σ τ hστ ↦ ℰ.ret (ih σ τ hστ))
   case letin hn hm ihn ihm _ _ _ =>
-    refine semCom.trans (semKletin wtk (.letin hn hm)) ?_
+    refine .trans (semKletin wtk (.letin hn hm)) ?_
     exact ihn
-      (.letin (wtPlug (wtWeakenK wtk) hm))
-      (semK.letin (ihm (wtWeakenK wtk) hk.weaken))
+      (.letin (wtk.weaken.plug hm))
+      (.letin (ihm wtk.weaken hk.weaken))
   case case hv hm₁ hm₂ ihv ihm₁ ihm₂ _ _ _ =>
-    refine semCom.trans (semKcase wtk (.case hv hm₁ hm₂)) (λ σ τ hστ ↦ ?_)
+    refine .trans (semKcase wtk (.case hv hm₁ hm₂)) (λ σ τ hστ ↦ ?_)
     unfold semVal 𝒱 at ihv
     match ihv σ τ hστ with
     | .inl ⟨v, w, hA₁, ev, ew⟩ =>
       simp [-up, -ℰ, ev, ew]
-      refine ℰ.bwd ?_ ?_ (ihm₁ (wtWeakenK wtk) hk.weaken (v +: σ) (w +: τ) (semCtxt.cons hA₁ hστ))
+      refine ℰ.bwd ?_ ?_ (ihm₁ wtk.weaken hk.weaken (v +: σ) (w +: τ) (semCtxt.cons hA₁ hστ))
       all_goals rw [substUnion]; exact .ιl
     | .inr ⟨v, w, hA₂, ev, ew⟩ =>
       simp [-up, -ℰ, ev, ew]
-      refine ℰ.bwd ?_ ?_ (ihm₂ (wtWeakenK wtk) hk.weaken (v +: σ) (w +: τ) (semCtxt.cons hA₂ hστ))
+      refine ℰ.bwd ?_ ?_ (ihm₂ wtk.weaken hk.weaken (v +: σ) (w +: τ) (semCtxt.cons hA₂ hστ))
       all_goals rw [substUnion]; exact .ιr
   case prod ihn₁ ihn₂ _ _ _ =>
     refine hk.plug (λ σ τ hστ ↦ ?_)
     exact ℰ.prod (ihn₁ .nil (soundK .nil) σ τ hστ) (ihn₂ .nil (soundK .nil) σ τ hστ)
-  case fst ih _ _ _ => exact ih (.fst wtk) hk.fst
-  case snd ih _ _ _ => exact ih (.snd wtk) hk.snd
+  case fst ih _ _ _ => exact ih (.fst wtk) (.fst hk)
+  case snd ih _ _ _ => exact ih (.snd wtk) (.snd hk)
   all_goals intro σ τ hστ
   case var mem => exact hστ mem
   case unit => exact 𝒱.unit
