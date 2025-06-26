@@ -217,10 +217,13 @@ theorem 𝒞ℰ {m n A} (h : 𝒞 A m n) : ℰ A m n := by
 def semCtxt Γ (σ τ : Nat → Val) := ∀ {x A}, Γ ∋ x ∶ A → (σ x, τ x) ∈ ⟦ A ⟧ᵛ
 notation:40 Γ:41 "⊨" σ:41 "~" τ:41 => semCtxt Γ σ τ
 
-theorem semCtxtNil : ⬝ ⊨ var ~ var := by intro _ _ mem; cases mem
-theorem semCtxtCons {Γ σ τ v w A} (h : (v, w) ∈ ⟦ A ⟧ᵛ) (hστ : Γ ⊨ σ ~ τ) : Γ ∷ A ⊨ v +: σ ~ w +: τ
+theorem semCtxt.nil : ⬝ ⊨ var ~ var := by intro _ _ mem; cases mem
+theorem semCtxt.cons {Γ σ τ v w A} (h : (v, w) ∈ ⟦ A ⟧ᵛ) (hστ : Γ ⊨ σ ~ τ) : Γ ∷ A ⊨ v +: σ ~ w +: τ
   | _, _, .here => h
   | _, _, .there mem => hστ mem
+
+theorem semCtxt.rename {ξ σ τ} {Γ Δ : Ctxt} (hξ : Γ ⊢ ξ ∶ Δ) (h : Γ ⊨ σ ~ τ) : Δ ⊨ σ ∘ ξ ~ τ ∘ ξ :=
+  λ mem ↦ h (hξ _ _  mem)
 
 /-* Semantic equivalence of values and computations *-/
 
@@ -231,18 +234,18 @@ notation:40 Γ:41 "⊨" m:41 "~" n:41 "∶" B:41 => semCom Γ m n B
 
 /-* Semantic equivalence is a PER *-/
 
-theorem symCtxtSym {Γ σ τ} (h : Γ ⊨ σ ~ τ) : Γ ⊨ τ ~ σ := λ mem ↦ (h mem).sym
-theorem semValSym {Γ v w} {A : ValType} (h : Γ ⊨ v ~ w ∶ A) : Γ ⊨ w ~ v ∶ A :=
-  λ _ _ hστ ↦ (h _ _ (symCtxtSym hστ)).sym
-theorem semComSym {Γ m n} {B : ComType} (h : Γ ⊨ m ~ n ∶ B) : Γ ⊨ n ~ m ∶ B :=
-  λ _ _ hστ ↦ (h _ _ (symCtxtSym hστ)).sym
+theorem semCtxt.sym {Γ σ τ} (h : Γ ⊨ σ ~ τ) : Γ ⊨ τ ~ σ := λ mem ↦ (h mem).sym
+theorem semVal.sym {Γ v w} {A : ValType} (h : Γ ⊨ v ~ w ∶ A) : Γ ⊨ w ~ v ∶ A :=
+  λ _ _ hστ ↦ (h _ _ hστ.sym).sym
+theorem semCom.sym {Γ m n} {B : ComType} (h : Γ ⊨ m ~ n ∶ B) : Γ ⊨ n ~ m ∶ B :=
+  λ _ _ hστ ↦ (h _ _ hστ.sym).sym
 
-theorem symCtxtTrans {Γ ρ σ τ} (hρσ : Γ ⊨ ρ ~ σ) (hστ : Γ ⊨ σ ~ τ) : Γ ⊨ ρ ~ τ :=
+theorem semCtxt.trans {Γ ρ σ τ} (hρσ : Γ ⊨ ρ ~ σ) (hστ : Γ ⊨ σ ~ τ) : Γ ⊨ ρ ~ τ :=
   λ mem ↦ 𝒱.trans (hρσ mem) (hστ mem)
-theorem semValTrans {Γ v₁ v₂ v₃} {A : ValType} (h₁₂ : Γ ⊨ v₁ ~ v₂ ∶ A) (h₂₃ : Γ ⊨ v₂ ~ v₃ ∶ A) : Γ ⊨ v₁ ~ v₃ ∶ A :=
-  λ _ _ hστ ↦ by refine 𝒱.trans (h₁₂ _ _ hστ) (h₂₃ _ _ (symCtxtTrans (symCtxtSym hστ) hστ))
-theorem semComTrans {Γ m₁ m₂ m₃} {B : ComType} (h₁₂ : Γ ⊨ m₁ ~ m₂ ∶ B) (h₂₃ : Γ ⊨ m₂ ~ m₃ ∶ B) : Γ ⊨ m₁ ~ m₃ ∶ B :=
-  λ _ _ hστ ↦ by refine ℰ.trans (h₁₂ _ _ hστ) (h₂₃ _ _ (symCtxtTrans (symCtxtSym hστ) hστ))
+theorem semVal.trans {Γ v₁ v₂ v₃} {A : ValType} (h₁₂ : Γ ⊨ v₁ ~ v₂ ∶ A) (h₂₃ : Γ ⊨ v₂ ~ v₃ ∶ A) : Γ ⊨ v₁ ~ v₃ ∶ A :=
+  λ _ _ hστ ↦ by refine 𝒱.trans (h₁₂ _ _ hστ) (h₂₃ _ _ (semCtxt.trans hστ.sym hστ))
+theorem semCom.trans {Γ m₁ m₂ m₃} {B : ComType} (h₁₂ : Γ ⊨ m₁ ~ m₂ ∶ B) (h₂₃ : Γ ⊨ m₂ ~ m₃ ∶ B) : Γ ⊨ m₁ ~ m₃ ∶ B :=
+  λ _ _ hστ ↦ by refine ℰ.trans (h₁₂ _ _ hστ) (h₂₃ _ _ (semCtxt.trans hστ.sym hστ))
 
 /-*---------------------------------------------
   Fundamental theorem of soundness
@@ -267,7 +270,7 @@ theorem soundness {Γ} :
   case lam ih =>
     refine ℰ.lam (λ v w hA ↦ ?_)
     rw [← substUnion, ← substUnion]
-    exact ih (v +: σ) (w +: τ) (semCtxtCons hA hστ)
+    exact ih (v +: σ) (w +: τ) (semCtxt.cons hA hστ)
   case app ihm ihv =>
     let ⟨_ ,_, r₁, r₂, hAB⟩ := (ihm σ τ hστ).lam_inv
     let hB := hAB _ _ (ihv σ τ hστ)
@@ -275,7 +278,7 @@ theorem soundness {Γ} :
   case ret ih => exact ℰ.ret (ih σ τ hστ)
   case letin ihm ihn =>
     let ⟨v, w, r₁, r₂, hA⟩ := (ihm σ τ hστ).ret_inv
-    refine ℰ.bwds ?_ ?_ (ihn (v +: σ) (w +: τ) (semCtxtCons hA hστ))
+    refine ℰ.bwds ?_ ?_ (ihn (v +: σ) (w +: τ) (semCtxt.cons hA hστ))
     all_goals rw [substUnion]
     . exact .trans' (Evals.let r₁) (.once .ζ)
     . exact .trans' (Evals.let r₂) (.once .ζ)
@@ -284,11 +287,11 @@ theorem soundness {Γ} :
     match ihv σ τ hστ with
     | .inl ⟨v, w, hA₁, ev, ew⟩ =>
       simp [-up, -ℰ, ev, ew]
-      refine ℰ.bwd ?_ ?_ (ihm (v +: σ) (w +: τ) (semCtxtCons hA₁ hστ))
+      refine ℰ.bwd ?_ ?_ (ihm (v +: σ) (w +: τ) (semCtxt.cons hA₁ hστ))
       all_goals rw [substUnion]; exact .ιl
     | .inr ⟨v, w, hA₂, ev, ew⟩ =>
       simp [-up, -ℰ, ev, ew]
-      refine ℰ.bwd ?_ ?_ (ihn (v +: σ) (w +: τ) (semCtxtCons hA₂ hστ))
+      refine ℰ.bwd ?_ ?_ (ihn (v +: σ) (w +: τ) (semCtxt.cons hA₂ hστ))
       all_goals rw [substUnion]; exact .ιr
   case prod ihm ihn => exact ℰ.prod (ihm σ τ hστ) (ihn σ τ hστ)
   case fst ih =>
