@@ -72,6 +72,18 @@ theorem Evals.snd {m m'} (r : m ⇒⋆ m') : snd m ⇒⋆ snd m' := by
   case refl => exact .refl
   case trans r _ ih => exact .trans (.snd r) ih
 
+theorem Evals.lam_inv {m n} (r : lam m ⇒⋆ n) : lam m = n := by
+  generalize e : lam m = m' at r
+  induction r generalizing m <;> subst e
+  case refl => rfl
+  case trans r => cases r
+
+theorem Evals.prod_inv {m₁ m₂ n} (r : prod m₁ m₂ ⇒⋆ n) : prod m₁ m₂ = n := by
+  generalize e : prod m₁ m₂ = m at r
+  induction r generalizing m₁ m₂ <;> subst e
+  case refl => rfl
+  case trans r => cases r
+
 -- Multi-step reduction is confluent trivially by determinism
 theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) : ∃ m', n₁ ⇒⋆ m' ∧ n₂ ⇒⋆ m' := by
   induction r₁ generalizing n₂
@@ -80,12 +92,6 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
     cases r₂
     case refl => exact ⟨_, .refl, .trans r₁ rs₁⟩
     case trans r₂ rs₂ => rw [evalDet r₁ r₂] at *; exact ih rs₂
-
-theorem Evals.lam_inv {m n} (r : lam m ⇒⋆ n) : lam m = n := by
-  generalize e : lam m = m' at r
-  induction r generalizing m <;> subst e
-  case refl => rfl
-  case trans r => cases r
 
 /-*----------------------------
   Normal forms and evaluation

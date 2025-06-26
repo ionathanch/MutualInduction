@@ -248,7 +248,7 @@ theorem semKletin {Γ n m k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ
   case nil => exact soundCom h
   case app hk ih =>
     apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- app commutes with case
+    sorry; sorry -- app commutes with let
   case letin hm =>
     simp [-semCom, -lift]
     sorry -- let commutes with let
@@ -270,11 +270,11 @@ theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) 
     simp [-semCom, -lift]
     sorry -- let commutes with case
   case fst hk ih =>
-    apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- fst commutes with case
+    apply semCom.trans (semPlug hk (fstCase h)) (ih ?_)
+    sorry -- fst commutes with case
   case snd hk ih =>
-    apply semCom.trans (semPlug hk ?_) (ih ?_)
-    sorry; sorry -- snd commutes with case
+    apply semCom.trans (semPlug hk (sndCase h)) (ih ?_)
+    sorry -- snd commutes with case
 
 /-*-----------------------------
   A-normal translation of CBPV
