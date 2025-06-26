@@ -246,35 +246,23 @@ theorem semKletin {Γ n m k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ
   Γ ⊨ (k [letin n m]) ~ letin n ((renameK succ k) [m]) ∶ B₂ := by
   induction hk generalizing n m
   case nil => exact soundCom h
-  case app hv hk ih =>
-    apply semCom.trans (semPlug hk (appLet h hv)) (ih ?_)
-    sorry -- app commutes with let
+  case app hv hk ih => apply semCom.trans (semPlug hk (appLet h hv)) (ih (wtLetApp h hv))
   case letin hm =>
     simp [-semCom, -lift]
     sorry -- let commutes with let
-  case fst hk ih =>
-    apply semCom.trans (semPlug hk (fstLet h)) (ih ?_)
-    sorry -- fst commutes with let
-  case snd hk ih =>
-    apply semCom.trans (semPlug hk (sndLet h)) (ih ?_)
-    sorry -- snd commutes with let
+  case fst hk ih => apply semCom.trans (semPlug hk (fstLet h)) (ih (wtLetFst h))
+  case snd hk ih => apply semCom.trans (semPlug hk (sndLet h)) (ih (wtLetSnd h))
 
 theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ ⊢ case v m₁ m₂ ∶ B₁) :
   Γ ⊨ (k [case v m₁ m₂]) ~ case v ((renameK succ k) [m₁]) ((renameK succ k) [m₂]) ∶ B₂ := by
   induction hk generalizing v m₁ m₂
   case nil => exact soundCom h
-  case app hv hk ih =>
-    apply semCom.trans (semPlug hk (appCase h hv)) (ih ?_)
-    sorry -- app commutes with case
+  case app hv hk ih => apply semCom.trans (semPlug hk (appCase h hv)) (ih (wtCaseApp h hv))
   case letin hm =>
     simp [-semCom, -lift]
     sorry -- let commutes with case
-  case fst hk ih =>
-    apply semCom.trans (semPlug hk (fstCase h)) (ih ?_)
-    sorry -- fst commutes with case
-  case snd hk ih =>
-    apply semCom.trans (semPlug hk (sndCase h)) (ih ?_)
-    sorry -- snd commutes with case
+  case fst hk ih => apply semCom.trans (semPlug hk (fstCase h)) (ih (wtCaseFst h))
+  case snd hk ih => apply semCom.trans (semPlug hk (sndCase h)) (ih (wtCaseSnd h))
 
 /-*-----------------------------
   A-normal translation of CBPV

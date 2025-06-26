@@ -321,7 +321,7 @@ theorem appLet {Γ n m v A B}
   let ⟨n₁, n₂, r₁, r₂, hB⟩ := (soundCom hlet σ τ hστ).lam_inv
   have r₁' : app ((letin n m)⦃σ⦄) (v⦃σ⦄) ⇒⋆ n₁⦃v⦃σ⦄⦄ := .trans' r₁.app (.once .β)
   simp only [substCom] at *
-  cases hlet with case letin A' hn hm =>
+  cases hlet with | letin hn hm =>
   let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
   let ⟨_, m₂, _, rm₂, _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).lam_inv
   have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ lam m₂ := calc
@@ -348,7 +348,7 @@ theorem fstLet {Γ n m B₁ B₂}
   let ⟨n₁, _, n₂, _, r₁, r₂, hB₁⟩ := (soundCom hlet σ τ hστ).fst
   have r₁' : fst ((letin n m)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.fst (.once .π1)
   simp only [substCom] at *
-  cases hlet with case letin A' hn hm =>
+  cases hlet with | letin hn hm =>
   let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
   let ⟨m₁, _, m₂, _, _, r₂', _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).fst
   have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ prod m₂ _ := calc
@@ -373,7 +373,7 @@ theorem sndLet {Γ n m B₁ B₂}
   let ⟨_, n₁, _, n₂, r₁, r₂, hB₂⟩ := (soundCom hlet σ τ hστ).snd
   have r₁' : snd ((letin n m)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.snd (.once .π2)
   simp only [substCom] at *
-  cases hlet with case letin A' hn hm =>
+  cases hlet with | letin hn hm =>
   let ⟨w₁, w₂, _, rw₂, hA'⟩ := (soundCom hn σ τ hστ).ret_inv
   let ⟨m₁, _, m₂, _, _, r₂', _⟩ := (soundCom hm (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA' hστ)).fst
   have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ prod m₂ _ := calc
@@ -399,7 +399,7 @@ theorem appCase {Γ v w m₁ m₂ A B}
   let ⟨n₁, n₂, r₁, r₂, hB₁⟩ := (soundCom hcase σ τ hστ).lam_inv
   have r₁' : app ((case v m₁ m₂)⦃σ⦄) (w⦃σ⦄) ⇒⋆ n₁⦃w⦃σ⦄⦄ := .trans' r₁.app (.once .β)
   simp only [substCom] at *
-  cases hcase with case case hv hm₁ hm₂ =>
+  cases hcase with | case hv hm₁ hm₂ =>
   let hv := soundVal hv σ τ hστ; unfold 𝒱 at hv
   match hv with
   | .inl ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>
@@ -442,7 +442,7 @@ theorem fstCase {Γ v m₁ m₂ B₁ B₂}
   let ⟨n₁, _, n₂, _, r₁, r₂, hB₁⟩ := (soundCom hcase σ τ hστ).fst
   have r₁' : fst ((case v m₁ m₂)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.fst (.once .π1)
   simp only [substCom] at *
-  cases hcase with case case hv hm₁ hm₂ =>
+  cases hcase with | case hv hm₁ hm₂ =>
   let hv := soundVal hv σ τ hστ; unfold 𝒱 at hv
   match hv with
   | .inl ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>
@@ -481,7 +481,7 @@ theorem sndCase {Γ v m₁ m₂ B₁ B₂}
   let ⟨_, n₁, _, n₂, r₁, r₂, hB₁⟩ := (soundCom hcase σ τ hστ).snd
   have r₁' : snd ((case v m₁ m₂)⦃σ⦄) ⇒⋆ n₁ := .trans' r₁.snd (.once .π2)
   simp only [substCom] at *
-  cases hcase with case case hv hm₁ hm₂ =>
+  cases hcase with | case hv hm₁ hm₂ =>
   let hv := soundVal hv σ τ hστ; unfold 𝒱 at hv
   match hv with
   | .inl ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>

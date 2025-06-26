@@ -94,6 +94,10 @@ theorem wtRenameCom {ξ} {Γ Δ : Ctxt} {m} {B : ComType} :
   Δ ⊢ ξ ∶ Γ → Γ ⊢ m ∶ B → Δ ⊢ renameCom ξ m ∶ B :=
   λ hξ ↦ (wtRename hξ).right
 
+theorem wtWeakenVal {Γ A₁ A₂} {v : Val} :
+  Γ ⊢ v ∶ A₂ → Γ ∷ A₁ ⊢ renameVal succ v ∶ A₂ :=
+    wtRenameVal wRenameSucc
+
 theorem wtWeakenCom {Γ A B} {m : Com} :
   Γ ⊢ m ∶ B → Γ ∷ A ⊢ renameCom succ m ∶ B :=
   wtRenameCom wRenameSucc
@@ -101,3 +105,37 @@ theorem wtWeakenCom {Γ A B} {m : Com} :
 theorem wtWeakenCom₂ {Γ A₁ A₂ B} {m : Com} :
   Γ ∷ A₂ ⊢ m ∶ B → Γ ∷ A₁ ∷ A₂ ⊢ renameCom (lift succ) m ∶ B :=
   wtRenameCom (wRenameLift wRenameSucc)
+
+/-*--------------------------------------
+  Rearrangement lemmas for commutations
+--------------------------------------*-/
+
+theorem wtLetApp {Γ n m v A B} (hlet : Γ ⊢ letin n m ∶ Arr A B) (hv : Γ ⊢ v ∶ A) :
+  Γ ⊢ letin n (app m (renameVal succ v)) ∶ B := by
+  cases hlet with | letin hn hm =>
+  exact .letin hn (.app hm (wtWeakenVal hv))
+
+theorem wtLetFst {Γ n m B₁ B₂} (hlet : Γ ⊢ letin n m ∶ Prod B₁ B₂) :
+  Γ ⊢ letin n (fst m) ∶ B₁ := by
+  cases hlet with | letin hn hm =>
+  exact .letin hn (.fst hm)
+
+theorem wtLetSnd {Γ n m B₁ B₂} (hlet : Γ ⊢ letin n m ∶ Prod B₁ B₂) :
+  Γ ⊢ letin n (snd m) ∶ B₂ := by
+  cases hlet with | letin hn hm =>
+  exact .letin hn (.snd hm)
+
+theorem wtCaseApp {Γ v m₁ m₂ w A B} (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B) (hw : Γ ⊢ w ∶ A) :
+  Γ ⊢ case v (app m₁ (renameVal succ w)) (app m₂ (renameVal succ w)) ∶ B := by
+  cases hcase with | case hv hm₁ hm₂ =>
+  exact .case hv (.app hm₁ (wtWeakenVal hw)) (.app hm₂ (wtWeakenVal hw))
+
+theorem wtCaseFst {Γ v m₁ m₂ B₁ B₂} (hcase : Γ ⊢ case v m₁ m₂ ∶ Prod B₁ B₂) :
+  Γ ⊢ case v (fst m₁) (fst m₂) ∶ B₁ := by
+  cases hcase with | case hv hm₁ hm₂ =>
+  exact .case hv (.fst hm₁) (.fst hm₂)
+
+theorem wtCaseSnd {Γ v m₁ m₂ B₁ B₂} (hcase : Γ ⊢ case v m₁ m₂ ∶ Prod B₁ B₂) :
+  Γ ⊢ case v (snd m₁) (snd m₂) ∶ B₂ := by
+  cases hcase with | case hv hm₁ hm₂ =>
+  exact .case hv (.snd hm₁) (.snd hm₂)
