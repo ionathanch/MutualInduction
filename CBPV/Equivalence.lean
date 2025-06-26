@@ -303,3 +303,47 @@ theorem soundness {Γ} :
 
 def soundVal {Γ v} {A : ValType} : Γ ⊢ v ∶ A → Γ ⊨ v ~ v ∶ A := soundness.left v A
 def soundCom {Γ m} {B : ComType} : Γ ⊢ m ∶ B → Γ ⊨ m ~ m ∶ B := soundness.right m B
+
+/-*-------------------------------
+  Various commuting equivalences
+-------------------------------*-/
+
+theorem appCase {Γ v w m₁ m₂ A B}
+  (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B)
+  (hw : Γ ⊢ w ∶ A) :
+  Γ ⊨ app (case v m₁ m₂) w ~ case v (app m₁ (renameVal succ w)) (app m₂ (renameVal succ w)) ∶ B := by
+  intro σ τ hστ
+  let ⟨n₁, n₂, r₁, r₂, hB₁⟩ := (soundCom hcase σ τ hστ).lam_inv
+  have r₁' : app (case v m₁ m₂⦃σ⦄) (w⦃σ⦄) ⇒⋆ n₁⦃w⦃σ⦄⦄ := .trans' r₁.app (.once .β)
+  simp only [substCom] at *
+  cases hcase with case case hv hm₁ hm₂ =>
+  let hv := soundVal hv σ τ hστ; unfold 𝒱 at hv
+  match hv with
+  | .inl ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>
+    let ⟨_, _, _, r₂', hB₂⟩ := (soundCom hm₁ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₁ hστ)).lam_inv
+    rw [e₂]; rw [e₂] at r₂
+    let ⟨_, rlam₁, r'⟩ := confluence r₂ (.once .ιl); rw [← substUnion] at r'
+    let ⟨_, rlam₂, r'⟩ := confluence r₂' r'; rw [← rlam₂.lam_inv] at r'
+    injection Evals.lam_inv (.trans' rlam₁ r') with en₂; subst en₂
+    have r₂' :
+      case (.inl v₂) (app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄)) (app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄))
+        ⇒⋆ n₂⦃w⦃τ⦄⦄ := calc
+      _ ⇒⋆ app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .once .ιl
+      _ =  app (m₁⦃v₂ +: τ⦄) (w⦃τ⦄)                    := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
+      _ ⇒⋆ app (lam n₂) (w⦃τ⦄)                         := r₂'.app
+      _ ⇒  n₂⦃w⦃τ⦄⦄                                    := .β
+    exact ℰ.bwds r₁' r₂' (hB₁ _ _ (soundVal hw σ τ hστ))
+  | .inr ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>
+    let ⟨_, _, _, r₂', hB₂⟩ := (soundCom hm₂ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₁ hστ)).lam_inv
+    rw [e₂]; rw [e₂] at r₂
+    let ⟨_, rlam₁, r'⟩ := confluence r₂ (.once .ιr); rw [← substUnion] at r'
+    let ⟨_, rlam₂, r'⟩ := confluence r₂' r'; rw [← rlam₂.lam_inv] at r'
+    injection Evals.lam_inv (.trans' rlam₁ r') with en₂; subst en₂
+    have r₂' :
+      case (.inr v₂) (app (m₁⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄)) (app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄))
+        ⇒⋆ n₂⦃w⦃τ⦄⦄ := calc
+      _ ⇒⋆ app (m₂⦃⇑ τ⦄) (renameVal succ w⦃⇑ τ⦄) ⦃v₂⦄ := .once .ιr
+      _ =  app (m₂⦃v₂ +: τ⦄) (w⦃τ⦄)                    := by simp only [substCom]; rw [← substUnion, ← renameUpSubstVal, ← substDropVal]
+      _ ⇒⋆ app (lam n₂) (w⦃τ⦄)                         := r₂'.app
+      _ ⇒  n₂⦃w⦃τ⦄⦄                                    := .β
+    exact ℰ.bwds r₁' r₂' (hB₁ _ _ (soundVal hw σ τ hστ))

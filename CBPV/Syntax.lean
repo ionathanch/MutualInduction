@@ -397,7 +397,13 @@ theorem renameLiftLiftRename ξ m : renameCom (lift (lift ξ)) (renameCom (lift 
     _ = renameCom (lift succ ∘ lift ξ) m             := by rw [renameComExt]; exact liftLiftSucc ξ
     _ = renameCom (lift succ) (renameCom (lift ξ) m) := by rw [← renameComComp]
 
-theorem renameUpSubst σ m : renameCom succ (substCom σ m) = substCom (⇑ σ) (renameCom succ m) := by
+theorem renameUpSubstVal σ v : renameVal succ (substVal σ v) = substVal (⇑ σ) (renameVal succ v) := by
+  calc renameVal succ (substVal σ v)
+    _ = substVal (renameVal succ ∘ σ) v   := by rw [renameSubstVal]
+    _ = substVal (⇑ σ ∘ succ) v           := by rw [substValExt]; exact upSucc σ
+    _ = substVal (⇑ σ) (renameVal succ v) := by rw [substRenameVal]
+
+theorem renameUpSubstCom σ m : renameCom succ (substCom σ m) = substCom (⇑ σ) (renameCom succ m) := by
   calc renameCom succ (substCom σ m)
     _ = substCom (renameVal succ ∘ σ) m   := by rw [renameSubstCom]
     _ = substCom (⇑ σ ∘ succ) m           := by rw [substComExt]; exact upSucc σ

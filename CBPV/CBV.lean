@@ -334,7 +334,7 @@ theorem transSubst {σ} :
   case lam ih => simp [-lift, -up, ← ih, transUp]
   case inl ih | inr ih | val ih | fst ih | snd ih => simp [ih]
   case pair ihv ihw => simp [ihv, ihw]
-  case app iht ihu => simp [-lift, -up, iht, ← ihu, ← renameUpSubst]; simp
+  case app iht ihu => simp [-lift, -up, iht, ← ihu, ← renameUpSubstCom]; simp
   case case ihs iht ihu =>
     simp [-lift, -up, -CBV.up, ihs, ← iht, ← ihu]; repeat' constructor
     all_goals rw [← transUp, ← renameUpLiftSubst]

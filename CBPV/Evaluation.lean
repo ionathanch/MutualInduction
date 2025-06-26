@@ -81,6 +81,12 @@ theorem confluence {m n₁ n₂} (r₁ : m ⇒⋆ n₁) (r₂ : m ⇒⋆ n₂) :
     case refl => exact ⟨_, .refl, .trans r₁ rs₁⟩
     case trans r₂ rs₂ => rw [evalDet r₁ r₂] at *; exact ih rs₂
 
+theorem Evals.lam_inv {m n} (r : lam m ⇒⋆ n) : lam m = n := by
+  generalize e : lam m = m' at r
+  induction r generalizing m <;> subst e
+  case refl => rfl
+  case trans r => cases r
+
 /-*----------------------------
   Normal forms and evaluation
 ----------------------------*-/
