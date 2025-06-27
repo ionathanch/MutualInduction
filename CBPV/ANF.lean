@@ -485,9 +485,15 @@ theorem soundA {Γ} :
 theorem soundAnil {Γ m} {B : ComType} (h : Γ ⊢ m ∶ B) : Γ ⊨ m ~ ⟦m⟧ₘ ∶ B :=
   soundA.right h .nil .nil
 
-theorem retUnitA {m} (h : ⬝ ⊢ m ∶ F Unit) : ⟦m⟧ₘ ⇒⋆ ret unit := by
+theorem retBoolA {m v} (h : ⬝ ⊢ m ∶ F (Sum Unit Unit)) (r : m ⇒⋆ ret v) : ⟦m⟧ₘ ⇒⋆ ret v := by
   let hm := soundAnil h var var semCtxt.nil
   rw [substComId, substComId] at hm
-  unfold ℰ 𝒞 𝒱 at hm
-  let ⟨_, _, _, ⟨r, _⟩, ⟨_, _, ⟨eu₁, eu₂⟩, eret₁, eret₂⟩⟩ := hm
-  subst eu₁ eu₂ eret₁ eret₂; exact r
+  unfold ℰ 𝒞 𝒱 𝒱 at hm
+  let ⟨_, _, nm, ⟨r', _⟩, ⟨v₁, v₂, hSum, eret₁, eret₂⟩⟩ := hm
+  let eret₃ := Norm.join nm ⟨r, ⟨⟩⟩
+  subst eret₁ eret₂; injection eret₃ with e; subst e
+  match hSum with
+  | .inl ⟨_, _, ⟨e₁, e₂⟩, e₃, e₄⟩ =>
+    subst e₁ e₂ e₃ e₄; exact r'
+  | .inr ⟨_, _, ⟨e₁, e₂⟩, e₃, e₄⟩ =>
+    subst e₁ e₂ e₃ e₄; exact r'
