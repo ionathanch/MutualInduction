@@ -1,4 +1,5 @@
 import CBPV.Commutation
+import CBPV.CK
 
 open Nat ValType ComType Val Com
 
@@ -497,3 +498,7 @@ theorem retBoolA {m v} (h : ⬝ ⊢ m ∶ F (Sum Unit Unit)) (r : m ⇒⋆ ret v
     subst e₁ e₂ e₃ e₄; exact r'
   | .inr ⟨_, _, ⟨e₁, e₂⟩, e₃, e₄⟩ =>
     subst e₁ e₂ e₃ e₄; exact r'
+
+theorem retBoolACK {m v} (h : ⬝ ⊢ m ∶ F (Sum Unit Unit)) :
+  ⟨m, []⟩ ⤳⋆ ⟨ret v, []⟩ → ⟨⟦m⟧ₘ, []⟩ ⤳⋆ ⟨ret v, []⟩ :=
+  λ r ↦ evalStep ⟨⟩ (retBoolA h (stepEvalsNil r))
