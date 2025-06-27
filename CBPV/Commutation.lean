@@ -111,7 +111,51 @@ theorem letCase {Γ v m₁ m₂ n A} {B : ComType}
   Γ ⊨ letin (case v m₁ m₂) n
     ~ case v (letin m₁ (renameCom (lift succ) n)) (letin m₂ (renameCom (lift succ) n)) ∶ B := by
   intro σ τ hστ
-  sorry
+  let ⟨v₁, v₂, rv₁, rv₂, hA⟩ := (soundCom hcase σ τ hστ).ret_inv
+  have r₁' : letin ((case v m₁ m₂)⦃σ⦄) (n⦃⇑ σ⦄) ⇒⋆ n⦃v₁ +: σ⦄ := by
+    rw [substUnion]; exact .trans' rv₁.let (.once .ζ)
+  simp only [substCom] at *
+  cases hcase with | case hv hm₁ hm₂ =>
+  let hv := soundVal hv σ τ hστ; unfold 𝒱 at hv
+  match hv with
+  | .inl ⟨w₁, w₂, hA₁, e₁, e₂⟩ =>
+    rw [e₂]; rw [e₂] at rv₂
+    let ⟨n₁, n₂, rn₁, rn₂, _⟩ := (soundCom hm₁ (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA₁ hστ)).ret_inv
+    let rcase : case (inl w₂) (m₁⦃⇑ τ⦄) (m₂⦃⇑ τ⦄) ⇒⋆ ret n₂ := calc
+      _ ⇒ m₁⦃w₂ +: τ⦄ := by rw [substUnion]; exact .ιl
+      _ ⇒⋆ ret n₂     := rn₂
+    let ⟨_, rret₁, rret₂⟩ := confluence rv₂ rcase
+    rw [← rret₂.ret_inv] at rret₁; injection rret₁.ret_inv with e; subst e
+    clear rcase rret₁ rret₂
+    have r₂' : case (inl w₂)
+                    (letin (m₁⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))
+                    (letin (m₂⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))
+               ⇒⋆ n⦃v₂ +: τ⦄ := calc
+        _ ⇒ (letin (m₁⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))⦃w₂⦄ := .ιl
+        _ ⇒⋆ letin (m₁⦃w₂ +: τ⦄) (n⦃⇑τ⦄)
+          := by simp only [substCom]; rw [← substUnion, renameDropSubst]
+        _ ⇒⋆ letin (ret v₂) (n⦃⇑ τ⦄) := rn₂.let
+        _ ⇒ n⦃v₂ +: τ⦄ := by rw [substUnion]; exact .ζ
+    exact ℰ.bwds r₁' r₂' (soundCom hn (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA hστ))
+  | .inr ⟨w₁, w₂, hA₂, e₁, e₂⟩ =>
+    rw [e₂]; rw [e₂] at rv₂
+    let ⟨n₁, n₂, rn₁, rn₂, _⟩ := (soundCom hm₂ (w₁ +: σ) (w₂ +: τ) (semCtxt.cons hA₂ hστ)).ret_inv
+    let rcase : case (inr w₂) (m₁⦃⇑ τ⦄) (m₂⦃⇑ τ⦄) ⇒⋆ ret n₂ := calc
+      _ ⇒ m₂⦃w₂ +: τ⦄ := by rw [substUnion]; exact .ιr
+      _ ⇒⋆ ret n₂     := rn₂
+    let ⟨_, rret₁, rret₂⟩ := confluence rv₂ rcase
+    rw [← rret₂.ret_inv] at rret₁; injection rret₁.ret_inv with e; subst e
+    clear rcase rret₁ rret₂
+    have r₂' : case (inr w₂)
+                    (letin (m₁⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))
+                    (letin (m₂⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))
+               ⇒⋆ n⦃v₂ +: τ⦄ := calc
+        _ ⇒ (letin (m₂⦃⇑τ⦄) (renameCom (lift succ) n⦃⇑⇑τ⦄))⦃w₂⦄ := .ιr
+        _ ⇒⋆ letin (m₂⦃w₂ +: τ⦄) (n⦃⇑τ⦄)
+          := by simp only [substCom]; rw [← substUnion, renameDropSubst]
+        _ ⇒⋆ letin (ret v₂) (n⦃⇑ τ⦄) := rn₂.let
+        _ ⇒ n⦃v₂ +: τ⦄ := by rw [substUnion]; exact .ζ
+    exact ℰ.bwds r₁' r₂' (soundCom hn (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA hστ))
 
 theorem appCase {Γ v w m₁ m₂ A B}
   (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B)
@@ -126,7 +170,7 @@ theorem appCase {Γ v w m₁ m₂ A B}
   match hv with
   | .inl ⟨v₁, v₂, hA₁, e₁, e₂⟩ =>
     rw [e₂]; rw [e₂] at r₂
-    let ⟨_, _, _, r₂', hB₂⟩ := (soundCom hm₁ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₁ hστ)).lam_inv
+    let ⟨_, _, _, r₂', _⟩ := (soundCom hm₁ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₁ hστ)).lam_inv
     let ⟨_, rlam₁, r'⟩ := confluence r₂ (.once .ιl); rw [← substUnion] at r'
     let ⟨_, rlam₂, r'⟩ := confluence r₂' r'; rw [← rlam₂.lam_inv] at r'
     injection Evals.lam_inv (.trans' rlam₁ r') with en₂; subst en₂
@@ -142,7 +186,7 @@ theorem appCase {Γ v w m₁ m₂ A B}
     exact ℰ.bwds r₁' r₂' (hB₁ _ _ (soundVal hw σ τ hστ))
   | .inr ⟨v₁, v₂, hA₂, e₁, e₂⟩ =>
     rw [e₂]; rw [e₂] at r₂
-    let ⟨_, _, _, r₂', hB₂⟩ := (soundCom hm₂ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₂ hστ)).lam_inv
+    let ⟨_, _, _, r₂', _⟩ := (soundCom hm₂ (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA₂ hστ)).lam_inv
     let ⟨_, rlam₁, r'⟩ := confluence r₂ (.once .ιr); rw [← substUnion] at r'
     let ⟨_, rlam₂, r'⟩ := confluence r₂' r'; rw [← rlam₂.lam_inv] at r'
     injection Evals.lam_inv (.trans' rlam₁ r') with en₂; subst en₂
