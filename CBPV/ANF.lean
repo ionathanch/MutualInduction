@@ -48,9 +48,161 @@ theorem substRenameK {ξ σ k} : substK σ (renameK ξ k) = substK (σ ∘ ξ) k
   case letin m => exact (substRename _ _ _ (upLift _ _ _ (λ _ ↦ rfl))).right m
   case fst ih | snd ih => exact ih
 
-/-*---------------------
-  Typing continuations
----------------------*-/
+/-*-----------------------------
+  A-normal translation of CBPV
+-----------------------------*-/
+
+section
+set_option hygiene false
+local notation:1023 "⟦" v "⟧ᵥ" => Aval v
+local notation:1023 "⟦" m "⟧ₘ" => Acom .nil m
+local notation:1022 "⟦" m "⟧ₘ" k => Acom k m
+mutual
+@[simp]
+def Aval : Val → Val
+  | var x => .var x
+  | unit => .unit
+  | inl v => .inl ⟦ v ⟧ᵥ
+  | inr v => .inr ⟦ v ⟧ᵥ
+  | thunk m => .thunk ⟦ m ⟧ₘ
+
+@[simp]
+def Acom (k : K) : Com → Com
+  | force v => k [ .force ⟦ v ⟧ᵥ ]
+  | ret v   => k [ .ret ⟦ v ⟧ᵥ ]
+  | lam m   => k [ .lam ⟦ m ⟧ₘ ]
+  | app n v   => ⟦ n ⟧ₘ .app ⟦ v ⟧ᵥ k
+  | letin n m => ⟦ n ⟧ₘ .letin (⟦ m ⟧ₘ renameK succ k)
+  | case v m₁ m₂ => .case ⟦ v ⟧ᵥ (⟦ m₁ ⟧ₘ renameK succ k) (⟦ m₂ ⟧ₘ renameK succ k)
+  | prod m₁ m₂ => k [ .prod ⟦ m₁ ⟧ₘ ⟦ m₂ ⟧ₘ ]
+  | fst n => ⟦ n ⟧ₘ .fst k
+  | snd n => ⟦ n ⟧ₘ .snd k
+  /- I think this is the A-normalization with join points?
+  | case v m₁ m₂ =>
+    .letin (.ret (.thunk (.com (.lam ((renameK succ k) [ .force (.var 0) ])))))
+      (.case (⟦ v ⟧ᵥ)
+        (.com (.app (.force (.var 1)) (.thunk (ANF.renameCfg (lift succ) (⟦ m₁ ⟧ₘ)))))
+        (.com (.app (.force (.var 1)) (.thunk (ANF.renameCfg (lift succ) (⟦ m₂ ⟧ₘ))))))
+  -/
+end
+end
+notation:1023 "⟦" v "⟧ᵥ" => Aval v
+notation:1023 "⟦" m "⟧ₘ" => Acom K.nil m
+notation:1022 "⟦" m "⟧ₘ" k => Acom k m
+
+/-*-----------------------------------------------------------------
+  Validity of A-normal translation,
+  i.e. translation produces values, computations, configurations:
+    v ::= x | () | inl v | inr v | thunk m
+    n ::= v! | λx. m | n v | return v | (m, m) | n.1 | n.2
+    m ::= n | k[n] | let x ← n in m
+      | case v of {inl x => m; inr x => m}
+    k ::= ⬝ | k[⬝ v] | let x ← ⬝ in m | k[fst ⬝] | k[snd ⬝]
+-----------------------------------------------------------------*-/
+
+mutual
+@[simp]
+def isVal : Val → Prop
+  | thunk m => isCfg m
+  | _ => True
+
+@[simp]
+def isCom : Com → Prop
+  | force v | ret v => isVal v
+  | lam m => isCfg m
+  | app n v => isCom n ∧ isVal v
+  | fst n | snd n => isCom n
+  | prod m₁ m₂ => isCfg m₁ ∧ isCfg m₂
+  | _ => False
+
+@[simp]
+def isCfg : Com → Prop
+  | letin n m => isCom n ∧ isCfg m
+  | case _ m₁ m₂ => isCfg m₁ ∧ isCfg m₂
+  | n => isCom n
+end
+
+@[simp]
+def isK : K → Prop
+  | .nil => True
+  | .app v k => isVal v ∧ isK k
+  | .letin m => isCfg m
+  | .fst k | .snd k => isK k
+
+theorem isCom.isCfg {n} (isc : isCom n) : isCfg n := by
+  mutual_induction n generalizing isc
+  case letin | case => unfold isCom at isc; contradiction
+  all_goals simp [isc] at *
+
+theorem isK.plug {n k} (isk : isK k) (isc : isCom n) : isCfg (k [ n ]) := by
+  induction k generalizing n <;> simp at *
+  case nil => exact isc.isCfg
+  case letin => simp [isk, isc]
+  case app ih | fst ih | snd ih => apply ih <;> simp [isk, isc]
+
+theorem isRenameValCfg {ξ} :
+  (∀ v, isVal v → isVal (renameVal ξ v)) ∧
+  (∀ m, (isCom m → isCom (renameCom ξ m)) ∧
+        (isCfg m → isCfg (renameCom ξ m))) := by
+  refine ⟨λ v isv ↦ ?val, λ m ↦ ?com⟩
+  mutual_induction v, m generalizing ξ
+  all_goals simp [-lift] at *
+  case thunk ih => let ⟨_, ih⟩ := @ih ξ; exact ih isv
+  case force ih | ret ih => exact ih
+  case lam ih => let ⟨_, ih⟩ := @ih (lift ξ); exact ih
+  case fst ih | snd ih => let ⟨ih, _⟩ := @ih ξ; exact ih
+  case app ihn ihv =>
+    intro isn isv
+    let ⟨ih, _⟩ := @ihn ξ
+    exact ⟨ih isn, ihv isv⟩
+  case letin ihn ihm =>
+    intro isn ism
+    let ⟨ihn, _⟩ := @ihn ξ
+    let ⟨_, ihm⟩ := @ihm (lift ξ)
+    exact ⟨ihn isn, ihm ism⟩
+  case case ihv ihm₁ ihm₂ =>
+    intro ism₁ ism₂
+    let ⟨_, ihm₁⟩ := @ihm₁ (lift ξ)
+    let ⟨_, ihm₂⟩ := @ihm₂ (lift ξ)
+    exact ⟨ihm₁ ism₁, ihm₂ ism₂⟩
+  case prod ihm₁ ihm₂ =>
+    intro ism₁ ism₂
+    let ⟨_, ihm₁⟩ := @ihm₁ ξ
+    let ⟨_, ihm₂⟩ := @ihm₂ ξ
+    exact ⟨ihm₁ ism₁, ihm₂ ism₂⟩
+
+def isVal.rename {ξ v} : isVal v → isVal (renameVal ξ v) := isRenameValCfg.left v
+def isCom.rename {ξ m} : isCom m → isCom (renameCom ξ m) := (isRenameValCfg.right m).left
+def isCfg.rename {ξ m} : isCfg m → isCfg (renameCom ξ m) := (isRenameValCfg.right m).right
+
+theorem isK.rename {ξ k} (isk : isK k) : isK (renameK ξ k) := by
+  induction k generalizing ξ
+  all_goals simp at *
+  case app ih => let ⟨isv, isk⟩ := isk; exact ⟨isv.rename, ih isk⟩
+  case letin => exact isk.rename
+  case fst ih | snd ih => exact ih isk
+
+theorem isANF : (∀ v, isVal ⟦v⟧ᵥ) ∧ (∀ m k, isK k → isCfg (⟦m⟧ₘ k)) := by
+  refine ⟨λ v ↦ ?val, λ m k ↦ ?com⟩
+  mutual_induction v, m
+  all_goals simp
+  case thunk ih => apply ih; simp
+  all_goals intro isk
+  case force isv => apply isk.plug; simp [isv]
+  case lam ih | ret ih => apply isk.plug; simp [ih]
+  case app isc isv => apply isc; simp [isv, isk]
+  case letin isc₁ isc₂ => apply isc₁; simp; apply isc₂; simp [isk.rename]
+  case case isc₁ isc₂ => exact ⟨isc₁ _ (isk.rename), isc₂ _ (isk.rename)⟩
+  case prod isc₁ isc₂ => apply isk.plug; simp [isc₁, isc₂]
+  case fst isc | snd isc => apply isc; simp [isk]
+
+def Val.ANF : ∀ v, isVal ⟦v⟧ᵥ := isANF.left
+def Com.ANF : ∀ m, isCfg ⟦m⟧ₘ := λ m ↦ isANF.right m .nil ⟨⟩
+
+/-*------------------------------------------
+  Type preservation of A-normal translation
+  via well-typedness of continuations
+------------------------------------------*-/
 
 section
 set_option hygiene false
@@ -96,6 +248,26 @@ theorem wtK.plug {Γ n k B₁ B₂}
   case letin hm => exact .letin h hm
   case fst hn => exact hn (.fst h)
   case snd hn => exact hn (.snd h)
+
+theorem preservation {Γ} :
+  (∀ {v} {A : ValType}, Γ ⊢ v ∶ A → Γ ⊢ ⟦ v ⟧ᵥ ∶ A) ∧
+  (∀ {k m} {B₁ B₂ : ComType}, Γ ⊢ k ∶ B₁ ⇒ B₂ → Γ ⊢ m ∶ B₁ → Γ ⊢ ⟦ m ⟧ₘ k ∶ B₂) := by
+  refine ⟨λ h ↦ ?val, λ hk h ↦ ?com⟩
+  mutual_induction h, h
+  case var mem => exact .var mem
+  case unit => exact .unit
+  case inl h => exact .inl h
+  case inr h => exact .inr h
+  case thunk h => exact .thunk (h .nil)
+  case force h _ _ => exact (wtK.plug hk (.force h))
+  case ret h _ _ => exact (wtK.plug hk (.ret h))
+  case lam h _ _ => exact (wtK.plug hk (.lam (h .nil)))
+  case app hn hv k _ => exact hn (.app hv hk)
+  case letin hn hm _ _ => exact hn (.letin (hm (wtK.weaken hk)))
+  case case hv hm₁ hm₂ _ _ => exact .case hv (hm₁ (wtK.weaken hk)) (hm₂ (wtK.weaken hk))
+  case prod hm₁ hm₂ _ _ => exact wtK.plug hk (.prod (hm₁ .nil) (hm₂ .nil))
+  case fst h _ _ => exact h (.fst hk)
+  case snd h _ _ => exact h (.snd hk)
 
 /-*-------------------------------------
   Logical equivalence of continuations
@@ -259,48 +431,6 @@ theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) 
   case letin hm => simp [-semCom, -lift]; exact letCase h hm
   case fst hk ih => apply semCom.trans (semPlug hk (fstCase h)) (ih (wtCaseFst h))
   case snd hk ih => apply semCom.trans (semPlug hk (sndCase h)) (ih (wtCaseSnd h))
-
-/-*-----------------------------
-  A-normal translation of CBPV
------------------------------*-/
-
-section
-set_option hygiene false
-local notation:1023 "⟦" v "⟧ᵥ" => Aval v
-local notation:1023 "⟦" m "⟧ₘ" => Acom .nil m
-local notation:1022 "⟦" m "⟧ₘ" k => Acom k m
-mutual
-@[simp]
-def Aval : Val → Val
-  | var x => .var x
-  | unit => .unit
-  | inl v => .inl ⟦ v ⟧ᵥ
-  | inr v => .inr ⟦ v ⟧ᵥ
-  | thunk m => .thunk ⟦ m ⟧ₘ
-
-@[simp]
-def Acom (k : K) : Com → Com
-  | force v => k [ .force ⟦ v ⟧ᵥ ]
-  | ret v   => k [ .ret ⟦ v ⟧ᵥ ]
-  | lam m   => k [ .lam ⟦ m ⟧ₘ ]
-  | app n v   => ⟦ n ⟧ₘ .app ⟦ v ⟧ᵥ k
-  | letin n m => ⟦ n ⟧ₘ .letin (⟦ m ⟧ₘ renameK succ k)
-  | case v m₁ m₂ => .case ⟦ v ⟧ᵥ (⟦ m₁ ⟧ₘ renameK succ k) (⟦ m₂ ⟧ₘ renameK succ k)
-  | prod m₁ m₂ => k [ .prod ⟦ m₁ ⟧ₘ ⟦ m₂ ⟧ₘ ]
-  | fst n => ⟦ n ⟧ₘ .fst k
-  | snd n => ⟦ n ⟧ₘ .snd k
-  /- I think this is the A-normalization with join points?
-  | case v m₁ m₂ =>
-    .letin (.ret (.thunk (.com (.lam ((renameK succ k) [ .force (.var 0) ])))))
-      (.case (⟦ v ⟧ᵥ)
-        (.com (.app (.force (.var 1)) (.thunk (ANF.renameCfg (lift succ) (⟦ m₁ ⟧ₘ)))))
-        (.com (.app (.force (.var 1)) (.thunk (ANF.renameCfg (lift succ) (⟦ m₂ ⟧ₘ))))))
-  -/
-end
-end
-notation:1023 "⟦" v "⟧ᵥ" => Aval v
-notation:1023 "⟦" m "⟧ₘ" => Acom K.nil m
-notation:1022 "⟦" m "⟧ₘ" k => Acom k m
 
 /-*-----------------------------------------------------------
   Soundness of A-normal translation wrt semantic equivalence

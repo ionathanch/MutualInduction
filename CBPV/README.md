@@ -10,7 +10,7 @@ B ::= A → B | B & B | F A
 
 v ::= x | () | inl v | inr v | {v}
 m ::= v! | λx. m | m v | return v | let x ← m in m
-  | case v of {inl x => m ; inr x => m}
+  | case v of {inl x => m; inr x => m}
   | (m, m) | m.1 | m.2
 ```
 
@@ -46,6 +46,16 @@ all reduction paths are normalizing.
   implies strong normalization (inductive)
   implies strong normalization (traditional).
 
+Another goal is to show the correctness of an ANF translation of CBPV,
+which requires showing its semantic equivalence.
+* Equivalence: A logical equivalence between closed terms of a type
+  with respect to evaluation of closed commands.
+* Commutation: Various proofs that commands commute with configurations
+  with respect to logical equivalence.
+* ANF: The ANF translation into CBPV with commands and configurations,
+  validity and type preservation proofs,
+  and proving that A-normalized terms are logically equivalent to themselves.
+
 Remaining proof files show interesting properties of CBPV.
 
 * LeftmostOutermost.lean: A deterministic single-step reduction semantics
@@ -64,12 +74,12 @@ Remaining proof files show interesting properties of CBPV.
         ╽       ╽           ╽         ╽
 Evaluation    Typing    NormalInd    Reduction
   │   │       │ │  │        │  │         │    
-  │   ╽       ╽ │  │        ╽  ╰─────────│─────╼ LeftmostOutermost
-  │   CK ─╼ CBV │  │  OpenSemantics      │       Antisubstitution
+  │   ╽       ╽ │  │        ╽  ╰─────────│────╼ LeftmostOutermost
+  │   CK ─╼ CBV │  │  OpenSemantics      │      Antisubstitution
   │         CBN │  │    │                │
   ╽             ╽  ╽    ╽                ╽
   ClosedSemantics  Soundness         NormalAcc
-                          │           │
-                          ╽           ╽
+  Equivalence ─╮          │           │
+  Commutation ─┴─╼ ANF    ╽           ╽
                           Normalization
 ```
