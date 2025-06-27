@@ -1,4 +1,4 @@
-import CBPV.Equivalence
+import CBPV.Commutation
 
 open Nat ValType ComType Val Com
 
