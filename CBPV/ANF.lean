@@ -238,18 +238,16 @@ theorem semK.plug {Γ n₁ n₂ k₁ k₂ B₁ B₂} (hk : Γ ⊨ k₁ ~ k₂ �
 theorem semPlug {Γ n₁ n₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (hn : Γ ⊨ n₁ ~ n₂ ∶ B₁) : Γ ⊨ (k [ n₁ ]) ~ (k [ n₂ ]) ∶ B₂ :=
   (soundK hk).plug hn
 
-/-*----------------------------
-  ⚠️ danger proofs at work ⚠️
-----------------------------*-/
+/-*--------------------------------------
+  Plugging commutes with configurations
+--------------------------------------*-/
 
 theorem semKletin {Γ n m k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) (h : Γ ⊢ letin n m ∶ B₁) :
   Γ ⊨ (k [letin n m]) ~ letin n ((renameK succ k) [m]) ∶ B₂ := by
   induction hk generalizing n m
   case nil => exact soundCom h
   case app hv hk ih => apply semCom.trans (semPlug hk (appLet h hv)) (ih (wtLetApp h hv))
-  case letin hm =>
-    simp [-semCom, -lift]
-    sorry -- let commutes with let
+  case letin hm => simp [-semCom, -lift]; exact letLet h hm
   case fst hk ih => apply semCom.trans (semPlug hk (fstLet h)) (ih (wtLetFst h))
   case snd hk ih => apply semCom.trans (semPlug hk (sndLet h)) (ih (wtLetSnd h))
 
@@ -258,9 +256,7 @@ theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) 
   induction hk generalizing v m₁ m₂
   case nil => exact soundCom h
   case app hv hk ih => apply semCom.trans (semPlug hk (appCase h hv)) (ih (wtCaseApp h hv))
-  case letin hm =>
-    simp [-semCom, -lift]
-    sorry -- let commutes with case
+  case letin hm => simp [-semCom, -lift]; sorry -- let commutes with case
   case fst hk ih => apply semCom.trans (semPlug hk (fstCase h)) (ih (wtCaseFst h))
   case snd hk ih => apply semCom.trans (semPlug hk (sndCase h)) (ih (wtCaseSnd h))
 

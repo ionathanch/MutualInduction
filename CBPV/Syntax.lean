@@ -415,6 +415,16 @@ theorem renameUpLiftSubst σ m : renameCom (lift succ) (substCom (⇑ σ) m) = s
     _ = substCom (⇑ ⇑ σ ∘ lift succ) m             := by rw [substComExt]; intro n; rw [upUpSucc σ n]
     _ = substCom (⇑ ⇑ σ) (renameCom (lift succ) m) := by rw [substRenameCom]
 
+-- terrible name but extremely specific lemma for Equivalence.letLet I will never use again
+theorem renameDropSubst σ m v : ((renameCom (lift succ) m)⦃⇑⇑ σ⦄⦃⇑ (v +: var)⦄) = (m⦃⇑ σ⦄) := by
+  calc (renameCom (lift succ) m)⦃⇑⇑ σ⦄⦃⇑ (v +: var)⦄
+    _ = (renameCom (lift succ) (m ⦃⇑ σ⦄)⦃⇑ (v +: var)⦄) := by rw [renameUpLiftSubst]
+    _ = (renameCom (lift succ) (m ⦃⇑ σ⦄)⦃var 0 +: renameVal succ v +: var ∘ succ⦄)
+      := by rw [substComExt]; intro n; cases n with | zero => rfl | succ n => cases n <;> rfl
+    _ = (m⦃⇑ σ⦄⦃var 0 +: var ∘ succ⦄)                   := by rw [substDrop₂]
+    _ = (m⦃⇑ σ⦄⦃var⦄)                                   := by rw [substComExt]; intro n; cases n <;> rfl
+    _ = (m⦃⇑ σ⦄)                                        := by rw [substComId]
+
 /-*------------------------
   Contexts and membership
 ------------------------*-/

@@ -313,6 +313,31 @@ def soundCom {Γ m} {B : ComType} : Γ ⊢ m ∶ B → Γ ⊨ m ~ m ∶ B := sou
   Various commuting equivalences
 -------------------------------*-/
 
+theorem letLet {Γ n m m' A} {B : ComType}
+  (hlet : Γ ⊢ letin n m ∶ F A)
+  (hm' : Γ ∷ A ⊢ m' ∶ B) :
+  Γ ⊨ letin (letin n m) m' ~ letin n (letin m (renameCom (lift succ) m')) ∶ B := by
+  intro σ τ hστ
+  let ⟨v₁, v₂, rv₁, rv₂, hA⟩ := (soundCom hlet σ τ hστ).ret_inv
+  have r₁' : letin ((letin n m)⦃σ⦄) (m'⦃⇑ σ⦄) ⇒⋆ m'⦃v₁ +: σ⦄ := by
+    rw [substUnion]; exact .trans' rv₁.let (.once .ζ)
+  cases hlet with | letin hn hm =>
+  let ⟨w₁, w₂, rw₁, rw₂, _⟩ := (soundCom hn σ τ hστ).ret_inv
+  have rlet : letin (n⦃τ⦄) (m⦃⇑ τ⦄) ⇒⋆ m⦃w₂ +: τ⦄ := calc
+    _ ⇒⋆ letin (ret w₂) (m⦃⇑ τ⦄) := rw₂.let
+    _ ⇒  m⦃w₂ +: τ⦄ := by rw [substUnion]; exact .ζ
+  let ⟨_, rlet₁, rlet₂⟩ := confluence rv₂ rlet
+  rw [← rlet₁.ret_inv] at rlet₂
+  have r₂' : (letin n (letin m (renameCom (lift succ) m')))⦃τ⦄ ⇒⋆ m'⦃v₂ +: τ⦄ := calc
+    _ ⇒⋆ letin (ret w₂) (letin (m⦃⇑ τ⦄) ((renameCom (lift succ) m')⦃⇑⇑ τ⦄))
+      := by simp only [substCom]; exact rw₂.let
+    _ ⇒ (letin (m⦃⇑ τ⦄) ((renameCom (lift succ) m')⦃⇑⇑ τ⦄))⦃w₂⦄ := .ζ
+    _ = letin (m⦃w₂ +: τ⦄) (m'⦃⇑τ⦄)
+      := by simp only [substCom]; rw [← substUnion, renameDropSubst]
+    _ ⇒⋆ letin (ret v₂) (m'⦃⇑τ⦄) := rlet₂.let
+    _ ⇒ m'⦃v₂ +: τ⦄ := by rw [substUnion]; exact .ζ
+  exact ℰ.bwds r₁' r₂' (soundCom hm' (v₁ +: σ) (v₂ +: τ) (semCtxt.cons hA hστ))
+
 theorem appLet {Γ n m v A B}
   (hlet : Γ ⊢ letin n m ∶ Arr A B)
   (hv : Γ ⊢ v ∶ A) :

@@ -72,6 +72,12 @@ theorem Evals.snd {m m'} (r : m ⇒⋆ m') : snd m ⇒⋆ snd m' := by
   case refl => exact .refl
   case trans r _ ih => exact .trans (.snd r) ih
 
+theorem Evals.ret_inv {v m} (r : ret v ⇒⋆ m) : ret v = m := by
+  generalize e : ret v = n at r
+  induction r generalizing v <;> subst e
+  case refl => rfl
+  case trans r => cases r
+
 theorem Evals.lam_inv {m n} (r : lam m ⇒⋆ n) : lam m = n := by
   generalize e : lam m = m' at r
   induction r generalizing m <;> subst e
