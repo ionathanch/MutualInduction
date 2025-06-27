@@ -105,6 +105,14 @@ theorem sndLet {Γ n m B₁ B₂}
     _ ⇒  n₂                            := .π2
   exact ℰ.bwds r₁' r₂' hB₂
 
+theorem letCase {Γ v m₁ m₂ n A} {B : ComType}
+  (hcase : Γ ⊢ case v m₁ m₂ ∶ F A)
+  (hn : Γ ∷ A ⊢ n ∶ B) :
+  Γ ⊨ letin (case v m₁ m₂) n
+    ~ case v (letin m₁ (renameCom (lift succ) n)) (letin m₂ (renameCom (lift succ) n)) ∶ B := by
+  intro σ τ hστ
+  sorry
+
 theorem appCase {Γ v w m₁ m₂ A B}
   (hcase : Γ ⊢ case v m₁ m₂ ∶ Arr A B)
   (hw : Γ ⊢ w ∶ A) :

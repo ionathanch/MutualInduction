@@ -256,7 +256,7 @@ theorem semKcase {Γ v m₁ m₂ k B₁ B₂} (hk : Γ ⊢ k ∶ B₁ ⇒ B₂) 
   induction hk generalizing v m₁ m₂
   case nil => exact soundCom h
   case app hv hk ih => apply semCom.trans (semPlug hk (appCase h hv)) (ih (wtCaseApp h hv))
-  case letin hm => simp [-semCom, -lift]; sorry -- let commutes with case
+  case letin hm => simp [-semCom, -lift]; exact letCase h hm
   case fst hk ih => apply semCom.trans (semPlug hk (fstCase h)) (ih (wtCaseFst h))
   case snd hk ih => apply semCom.trans (semPlug hk (sndCase h)) (ih (wtCaseSnd h))
 
