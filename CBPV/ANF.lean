@@ -486,19 +486,38 @@ theorem soundA {Γ} :
 theorem soundAnil {Γ m} {B : ComType} (h : Γ ⊢ m ∶ B) : Γ ⊨ m ~ ⟦m⟧ₘ ∶ B :=
   soundA.right h .nil .nil
 
-theorem retBoolA {m v} (h : ⬝ ⊢ m ∶ F (Sum Unit Unit)) (r : m ⇒⋆ ret v) : ⟦m⟧ₘ ⇒⋆ ret v := by
+/-*------------------------------------------------------------
+  A-normalized ground returners compute the same normal forms
+------------------------------------------------------------*-/
+
+@[simp]
+def isGround : ValType → Prop
+  | .Unit => True
+  | .Sum A₁ A₂ => isGround A₁ ∧ isGround A₂
+  | U _ => False
+
+theorem 𝒱.ground {v w A} (h : (v, w) ∈ ⟦A⟧ᵛ) (g : isGround A) : v = w := by
+  mutual_induction A generalizing v w g
+  all_goals unfold 𝒱 at h
+  case Unit => simp [h]
+  case Sum ihA₁ ihA₂ =>
+    match h with
+    | .inl ⟨_, _, hA₁, ev, ew⟩ => subst ev ew; simp; exact ihA₁ hA₁ g.left
+    | .inr ⟨_, _, hA₂, ev, ew⟩ => subst ev ew; simp; exact ihA₂ hA₂ g.right
+  case U => simp at g
+
+theorem retGroundA {m n A} (h : ⬝ ⊢ m ∶ F A) (g : isGround A) (nm : m ⇓ₙ n) : ⟦m⟧ₘ ⇒⋆ n := by
+  let ⟨r, nfm⟩ := nm
   let hm := soundAnil h var var semCtxt.nil
   rw [substComId, substComId] at hm
-  unfold ℰ 𝒞 𝒱 𝒱 at hm
-  let ⟨_, _, nm, ⟨r', _⟩, ⟨v₁, v₂, hSum, eret₁, eret₂⟩⟩ := hm
-  let eret₃ := Norm.join nm ⟨r, ⟨⟩⟩
-  subst eret₁ eret₂; injection eret₃ with e; subst e
-  match hSum with
-  | .inl ⟨_, _, ⟨e₁, e₂⟩, e₃, e₄⟩ =>
-    subst e₁ e₂ e₃ e₄; exact r'
-  | .inr ⟨_, _, ⟨e₁, e₂⟩, e₃, e₄⟩ =>
-    subst e₁ e₂ e₃ e₄; exact r'
+  unfold ℰ 𝒞 at hm
+  let ⟨_, _, ⟨r', _⟩, ⟨ra', _⟩, ⟨v₁, v₂, hA, eret₁, eret₂⟩⟩ := hm
+  subst eret₁ eret₂
+  rw [← hA.ground g] at ra'
+  let ⟨_, rn, rret⟩ := confluence r r'
+  rw [← rret.ret_inv] at rn
+  simp [nfm.steps rn, ra']
 
-theorem retBoolACK {m v} (h : ⬝ ⊢ m ∶ F (Sum Unit Unit)) :
-  ⟨m, []⟩ ⤳⋆ ⟨ret v, []⟩ → ⟨⟦m⟧ₘ, []⟩ ⤳⋆ ⟨ret v, []⟩ :=
-  λ r ↦ evalStep ⟨⟩ (retBoolA h (stepEvalsNil r))
+theorem retGroundACK {m n A} (h : ⬝ ⊢ m ∶ F A) (g : isGround A) (nm : nf n) :
+  ⟨m, []⟩ ⤳⋆ ⟨n, []⟩ → ⟨⟦m⟧ₘ, []⟩ ⤳⋆ ⟨n, []⟩ :=
+  λ r ↦ evalStep nm (retGroundA h g ⟨stepEvalsNil r, nm⟩)

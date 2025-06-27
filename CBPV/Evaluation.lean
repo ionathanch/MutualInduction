@@ -108,14 +108,14 @@ def nf : Com → Prop
   | lam _ | ret _ | prod _ _ => True
   | force _ | app _ _ | letin _ _ | case _ _ _ | fst _ | snd _ => False
 
-theorem nfStepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
+theorem nf.stepn't {m n} (nfm : nf m) : ¬ m ⇒ n := by
   cases m <;> simp at *
   all_goals intro r; cases r
 
-theorem nfSteps {m n} (nfm : nf m) (r : m ⇒⋆ n) : m = n := by
+theorem nf.steps {m n} (nfm : nf m) (r : m ⇒⋆ n) : m = n := by
   cases r
   case refl => rfl
-  case trans r _ => cases nfStepn't nfm r
+  case trans r _ => cases nfm.stepn't r
 
 @[reducible] def Norm (m n : Com) := m ⇒⋆ n ∧ nf n
 infix:40 "⇓ₙ" => Norm
@@ -128,7 +128,7 @@ theorem Norm.bwd {m m' n} (r : m ⇒⋆ m') : m' ⇓ₙ n → m ⇓ₙ n
 theorem Norm.join {m n₁ n₂} : m ⇓ₙ n₁ → m ⇓ₙ n₂ → n₁ = n₂
   | ⟨rn₁, nfn₁⟩, ⟨rn₂, nfn₂⟩ =>
     let ⟨n', rn₁', rn₂'⟩ := confluence rn₁ rn₂
-    by rw [nfSteps nfn₁ rn₁', nfSteps nfn₂ rn₂']
+    by rw [nfn₁.steps rn₁', nfn₂.steps rn₂']
 
 /-*---------------------
   Strong normalization
@@ -138,7 +138,7 @@ inductive SN : Com → Prop where
   | sn : ∀ m, (∀ n, m ⇒ n → SN n) → SN m
 
 theorem SN.nf {m} (nfm : nf m) : SN m := by
-  constructor; intro n r; cases nfStepn't nfm r
+  constructor; intro n r; cases nfm.stepn't r
 
 theorem Evals.sn {m n} (r : m ⇒⋆ n) (nfn : nf n) : SN m := by
   induction r
