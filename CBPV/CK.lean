@@ -99,6 +99,42 @@ inductive BStep : Com → Com → Prop where
 end
 infix:40 "⇓" => BStep
 
+theorem BStep.terminal {n} (nfn : nf n) : n ⇓ n := by
+  mutual_induction n generalizing nfn
+  all_goals simp at nfn <;> constructor
+
+theorem BStep.determinism {m t₁ t₂} (r₁ : m ⇓ t₁) (r₂ : m ⇓ t₂) : t₁ = t₂ := by
+  induction r₁ generalizing t₂ <;> cases r₂
+  case β.β ih₁ ih₂ _ h₁ h₂
+    | ζ.ζ ih₁ ih₂ _ h₁ h₂ =>
+    injection ih₁ h₁ with e; subst e
+    exact ih₂ h₂
+  case π1.π1 ih₁ ih₂ _ _ h₁ h₂
+    | π2.π2 ih₁ ih₂ _ _ h₁ h₂ =>
+    injection ih₁ h₁ with e₁ e₂; subst e₁ e₂
+    exact ih₂ h₂
+  all_goals apply_rules
+
+theorem BStep.app {m n v t} (h : ∀ t, m ⇓ t → n ⇓ t) : .app m v ⇓ t → .app n v ⇓ t := by
+  intro r; generalize e : Com.app m v = mv at r
+  induction r generalizing m n <;> injection e
+  case β h₁ h₂ _ _ em ev => subst em ev; exact .β (h _ h₁) h₂
+
+theorem BStep.letin {n₁ n₂ m t} (h : ∀ t, n₁ ⇓ t → n₂ ⇓ t) : .letin n₁ m ⇓ t → .letin n₂ m ⇓ t := by
+  intro r; generalize e : Com.letin n₁ m = m' at r
+  induction r generalizing m <;> injection e
+  case ζ h₁ h₂ _ _ en em => subst en em; exact .ζ (h _ h₁) h₂
+
+theorem BStep.fst {m n t} (h : ∀ t, m ⇓ t → n ⇓ t) : .fst m ⇓ t → .fst n ⇓ t := by
+  intro r; generalize e : Com.fst m = m' at r
+  induction r generalizing m <;> injection e
+  case π1 h₁ h₂ _ _ e => subst e; exact .π1 (h _ h₁) h₂
+
+theorem BStep.snd {m n t} (h : ∀ t, m ⇓ t → n ⇓ t) : .snd m ⇓ t → .snd n ⇓ t := by
+  intro r; generalize e : Com.snd m = m' at r
+  induction r generalizing m <;> injection e
+  case π2 h₁ h₂ _ _ e => subst e; exact .π2 (h _ h₁) h₂
+
 end Big
 
 namespace Eq
@@ -189,6 +225,35 @@ theorem stepEvals {m n k₁ k₂} (r : ⟨m, k₁⟩ ⤳⋆ ⟨n, k₂⟩) : dis
     | .inr e => simp [e, ih]
 
 theorem stepEvalsNil {m n} : ⟨m, []⟩ ⤳⋆ ⟨n, []⟩ → m ⇒⋆ n := stepEvals
+
+/-* CK machine semantics is sound wrt big-step semantics *-/
+
+theorem bigCongK {m n t k} (h : ∀ t, n ⇓ t → m ⇓ t) : dismantle n k ⇓ t → dismantle m k ⇓ t := by
+  induction k generalizing m n
+  case nil => exact h _
+  case cons f _ ih =>
+    cases f <;> refine ih (λ t ↦ ?_)
+    all_goals apply_assumption [BStep.app h, BStep.letin h, BStep.fst h, BStep.snd h]
+
+theorem bigStep {m n t k₁ k₂} (r : ⟨m, k₁⟩ ⤳ ⟨n, k₂⟩) : dismantle n k₂ ⇓ t → dismantle m k₁ ⇓ t := by
+  generalize em : (m, k₁) = mk at r
+  generalize en : (n, k₂) = nk at r
+  induction r generalizing m n k₁ k₂
+  all_goals injection em with em ek; subst em ek
+  all_goals injection en with en ek; subst en ek
+  all_goals apply bigCongK; (try simp) <;> intro t r
+  case β | ζ | π1 | π2 => constructor; constructor; assumption
+  case ιl | ιr | π => constructor; assumption
+
+theorem bigSteps {m n t k₁ k₂} (r : ⟨m, k₁⟩ ⤳⋆ ⟨n, k₂⟩) : dismantle n k₂ ⇓ t → dismantle m k₁ ⇓ t := by
+  generalize em : (m, k₁) = mk at r
+  generalize en : (n, k₂) = nk at r
+  induction r generalizing m n k₁ k₂ <;> intro rn
+  case refl => subst en; injection em with em ek; subst em ek; exact rn
+  case trans rm _ ih => subst en em; exact bigStep rm (ih rfl rfl rn)
+
+theorem bigStepsNil {m t} (nfn : nf t)  (r : ⟨m, []⟩ ⤳⋆ ⟨t, []⟩) : m ⇓ t :=
+  bigSteps r (.terminal nfn)
 
 /-* CK machine semantics is complete wrt big-step semantics *-/
 
