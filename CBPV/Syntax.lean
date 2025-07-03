@@ -135,7 +135,6 @@ theorem renameId :
   mutual_induction v, m
   all_goals simp; try repeat' constructor
   all_goals try assumption
-  all_goals unfold Function.comp id
   all_goals rw [renameComExt (0 +: succ) id]
   all_goals apply_rules [liftId]
 
