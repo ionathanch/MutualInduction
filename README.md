@@ -207,7 +207,8 @@ we also need to ensure that
 These conditions ensure that we have the right motives needed
 to apply the recursors to each goal.
 If a motive is missing due to a missing target for one of the inductive types,
-then we add that motive as an additional goal.
+then ~~we add that motive as an additional goal~~
+it gets set to the trivial constant type `PUnit`.
 
 We then check that the provided generalized variables
 are indeed shared across goals, i.e. declared in each of the goals' contexts.
@@ -329,10 +330,17 @@ m : Nat
 To clean up, we remove the name of the inductive type from the goal,
 then intros the constructor arguments, the induction hypotheses,
 and the generalized variables.
+If the goal is trivially `PUnit`, it gets solved by its constructor.
+If an induction hypothesis is the trivial `PUnit`, it gets cleared away.
 
 This work is done by `Lean.Elab.Tactic.deduplicate`.
 
 ## Extensions
+
+There are many possible usability improvements for this tactic.
+A simple one is adding an option to keep missing motives as additional goals
+instead of filling them with `PUnit`, but this use case seems rare.
+Below are other more elaborate potential extensions.
 
 ### Joint theorems
 
@@ -375,6 +383,123 @@ mutual_induction x₁ using rec₁, ..., xₙ using recₙ generalizing y₁ ...
 ...
 | tagₖ z₁ ... zᵢₖ => tacₖ
 ```
+
+# Towards nested induction: `mk_all`
+
+As an extra bonus, this repo also includes a `mk_all` attribute for inductive types
+that generates new definitions that lift predicates over the given parameters
+to predicates over that inductive type.
+For example, consider the following list type that we want to lift predicates over.
+
+```lean
+@[mk_all α]
+inductive List (α : Type) where
+  | nil : List α
+  | cons : α → List α → List α
+```
+
+By default, `List` is in a `Type` universe.
+Then two definitions are generated: `List.all` and `List.iall`,
+which lift predicates over `α` to predicates over `List α`
+into `Prop` and into `Type`, respectively.
+Internally, the predicates are implemented using the list recursor,
+but are equivalent to the following recursive functions.
+
+```lean
+def List.all {α : Type} (P : α → Type) : List α → Type
+  | nil => Unit
+  | cons x xs => P x × List.all P xs
+
+def List.iall {α : Type} (P : α → Prop) : List α → Prop
+  | nil => True
+  | cons x xs => P x ∧ List.iall P xs
+```
+
+If `List` is in the `Prop` universe,
+then only a `List.all` into `Prop` is generated as an inductive type.
+
+```lean
+inductive List.all {α : Type} (P : α → Prop) : Lst α → Prop where
+  | nil : all P nil
+  | cons x xs : P x → all P xs → all P (cons x xs)
+```
+
+Given some list `xs = [a, b, c, ...]`,
+the predicate `List.all P xs` represents a list of propositions
+`[P a, P b, P c, ...]`.
+This is particularly useful if we have an inductive nested inside of lists,
+and we want to lift a predicate over the nested inductive to a predicate on lists of them.
+The classic example is the rose tree.
+
+```lean
+inductive Tree (α : Type) where
+  | leaf : Tree α
+  | node : α → List (Tree α) → Tree α
+```
+
+The recursor for `Tree` treats the nesting opaquely,
+demanding a predicate over `List (Tree α)` as a second motive,
+and generating additional cases for the nesting inductive `List`.
+
+```lean
+Tree.rec : ∀ {α : Type} {motive_1 : Tree α → Type} {motive_2 : List (Tree α) → Type},
+  -- cases for Tree
+  motive_1 leaf →
+  (∀ x xs, motive_2 xs → motive_1 (node x xs)) →
+  -- cases for List
+  motive_2 nil →
+  (∀ x xs, motive_1 x → motive_2 xs → motive_2 (cons x xs)) →
+  -- conclusion for Tree
+  ∀ (t : Tree α), motive_1 t
+```
+
+What would be more useful is if `motive_1` were applied to each subtree in the node,
+which is exactly what `List.all motive_1` does.
+Such elimination principles into `Prop` and `Type` can easily be proven.
+
+```lean
+theorem Tree.ielim {α} (P : Tree α → Prop)
+  (hleaf : P leaf)
+  (hnode : ∀ {x xs}, List.iall P xs → P (node x xs)) :
+  ∀ t, P t := by
+  intro t
+  induction t using Tree.rec (motive_2 := List.iall P)
+  case leaf => exact hleaf
+  case node ih => exact hnode ih
+  case nil => exact ⟨⟩
+  case cons hx hxs => exact ⟨hx, hxs⟩
+
+noncomputable def Tree.elim {α} (P : Tree α → Type)
+  (hleaf : P leaf)
+  (hnode : ∀ {x xs}, List.all P xs → P (node x xs)) :
+  ∀ t, P t := by
+  intro t
+  induction t using Tree.rec (motive_2 := List.all P)
+  case leaf => exact hleaf
+  case node ih => exact hnode ih
+  case nil => exact ⟨⟩
+  case cons hx hxs => exact ⟨hx, hxs⟩
+```
+
+Unfortunately, the recursors for nested inductives in Lean are currently noncomputable,
+so we can at most define a better noncomputable elimination principle for `Tree`.
+
+In general, the `mk_all` attribute can be applied with multiple parameters,
+so long as each parameter appears strictly positively in the inductive definition.
+Lean doesn't support nonuniform parameters,
+so generating predicate liftings for deeply nested inductives
+(such as perfect trees) is not supported either.
+Future work may include the following:
+
+* Generating `.(i)all` for already-defined inductive types from other modules.
+* Generating the definitions of the `.(i)all`-augmented eliminators automatically.
+* Generating corresponding `.below` and `.brecOn` definitions
+  that incorporate `.(i)all`.
+
+The design of `Lean.Meta.MkAll.mkAllDef` and `Lean.Meta.MkAll.mkIAllDef`
+are based on `Lean.Meta.BRecOn.mkBelowOrIBelow` and `Lean.Meta.IndPredBelow.mkBelow` respectively,
+so the proof search for the eliminators will likely follow the design of
+`Lean.Meta.BRecOn.mkBRecOn` and `Lean.Meta.BRecOn.mkBInductionOn`.
 
 <!--
 Let `Γ` and `Δ` represent telescopes.
