@@ -387,6 +387,9 @@ where
       unless altMVarIds.contains mvarId do
         mvarId.setTag name
         unsolvedMotives := unsolvedMotives.push mvarId
+    -- add motives as goals instead of marking them as trivial
+    /- pushGoals unsolvedMotives.toList
+       return #[] -/
     unsolvedMotives.forM trivialMotive
     return unsolvedMotives
   trivialMotive (mvarId : MVarId) : TacticM Unit := do
