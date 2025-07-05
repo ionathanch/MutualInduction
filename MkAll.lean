@@ -235,12 +235,23 @@ def mkAllDef (indVal : InductiveVal) (recVal : RecursorVal) (αnames : Array Nam
 
 def mkAllInductive (ind : Name) (params : Array Name) : MetaM Unit := do
   let indVal ← getConstInfoInduct ind
+  let allName  := Name.str ind "all"
+  let iallName := Name.str ind "iall"
   if (← isInductivePredicate ind) then
-    addDecl <| ← mkIAllDef indVal params (.str ind "all")
+    addDecl <| ← mkIAllDef indVal params allName
+    mkAllAttributes allName
   else
     let .recInfo recVal ← getConstInfo (mkRecName ind) | return
-    addDecl <| ← mkAllDef indVal recVal params (.str ind "all")  false
-    addDecl <| ← mkAllDef indVal recVal params (.str ind "iall") true
+    addDecl <| ← mkAllDef indVal recVal params allName  false
+    addDecl <| ← mkAllDef indVal recVal params iallName true
+    mkAllAttributes allName
+    mkAllAttributes iallName
+  where
+  /-- The .all and .iall predicates are reducible, protected, and simpable. -/
+  mkAllAttributes (all : Name) : MetaM Unit := do
+    setReducibleAttribute all
+    modifyEnv fun env => addProtected env all
+    enableRealizationsForConst all
 
 syntax (name := mkAll) "mk_all" (ppSpace ident)+ : attr
 

@@ -491,6 +491,9 @@ so generating predicate liftings for deeply nested inductives
 (such as perfect trees) is not supported either.
 Future work may include the following:
 
+* For inductives not in `Prop`,
+  making `simp` reduce `.(i)all` on constructors
+  as if they were defined as the equivalent recursive definition.
 * Generating `.(i)all` for already-defined inductive types from other modules.
 * Generating the definitions of the `.(i)all`-augmented eliminators automatically.
 * Generating corresponding `.below` and `.brecOn` definitions
