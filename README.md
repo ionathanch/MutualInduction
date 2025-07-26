@@ -11,6 +11,9 @@
 * [Extensions](#extensions)
   * [Joint theorems](#joint-theorems)
   * [`using` and `with` clauses](#using-and-with-clauses)
+* [Mutual induction in other proof assistants](#mutual-induction-in-other-proof-assistants)
+  * [Rocq](#rocq)
+  * [Isabelle](#isabelle)
 
 ---
 
@@ -383,6 +386,105 @@ mutual_induction x₁ using rec₁, ..., xₙ using recₙ generalizing y₁ ...
 ...
 | tagₖ z₁ ... zᵢₖ => tacₖ
 ```
+
+## Mutual induction in other proof assistants
+
+### Rocq
+
+By default, Rocq generates nonmutual induction principles for mutual inductives.
+For instance, the even/odd predicates
+
+```rocq
+Inductive Even : nat -> Prop :=
+| zero : Even 0
+| succ_odd n : Odd n -> Even (S n)
+with Odd : nat -> Prop :=
+| succ_even n : Even n -> Odd (S n).
+```
+
+come with induction principles defined via `fix` over independent motives.
+
+```rocq
+Even_ind : forall P : nat -> Prop,
+  P 0 ->
+  (forall n, Odd n -> P (S n)) ->
+  forall n, Even n -> P n
+
+Odd_ind  : forall P : nat -> Prop,
+  (forall n, Even n -> P (S n)) ->
+  forall n, Odd -> P n
+```
+
+Using `Scheme` generates the mutual induction principles we expect.
+
+```rocq
+Scheme Even_Odd_ind := Induction for Even Sort Prop
+  with Odd_Even_ind := Induction for Odd  Sort Prop.
+```
+
+```rocq
+Even_Odd_ind : forall (P : forall n, Even n -> Prop) (P0 : forall n, Odd n -> Prop)
+  P 0 ->
+  (forall n (o : Odd n), P0 n 0 -> P (S n) (succ_odd n o)) ->
+  (forall n (e : Odd n), P n e -> P0 (S n) (odd_succ n e)) ->
+  forall n (e : Even n), P n e
+
+Odd_Even_ind : forall (P : forall n, Even n -> Prop) (P0 : forall n, Odd n -> Prop)
+  P 0 ->
+  (forall n (o : Odd n), P0 n 0 -> P (S n) (succ_odd n o)) ->
+  (forall n (e : Odd n), P n e -> P0 (S n) (odd_succ n e)) ->
+  forall n (o : Odd n), P0 n o
+```
+
+These can be used with the induction tactic just as in Lean:
+`induction e using Even_Odd_ind with (P0 := Q)`
+in Rocq corresponds roughly to
+`induction e using Even.rec (motive_2 := Q)`
+in Lean.
+
+But we can do one better: `Combined Scheme` conjoins the conclusions
+and deduplicates the cases, similar to what `mutual_induction` does internally.
+
+```rocq
+Combined Scheme Even_Odd_mutind from Even_Odd_ind, Odd_Even_ind.
+```
+
+```rocq
+Even_Odd_mutind : forall (P : forall n, Even n -> Prop) (P0 : forall n, Odd n -> Prop)
+  P 0 ->
+  (forall n (o : Odd n), P0 n 0 -> P (S n) (succ_odd n o)) ->
+  (forall n (e : Odd n), P n e -> P0 (S n) (odd_succ n e)) ->
+  (forall n (e : Even n), P n e) /\ (forall n (o : Odd n), P0 n o)
+```
+
+This combined scheme, although conveniently generated for us,
+has the same disadvantages as outlined in the beginning.
+
+Additionally, Rocq provides top-level mutual theorem statements,
+which generates two goals where both theorems are in scope.
+
+```rocq
+Lemma plusEven {n m} (e : Even (n + m)) : (Even n /\ Even m) \/ (Odd  n /\ Odd m)
+ with plusOdd  {n m} (o : Odd (n + m))  : (Odd  n /\ Even m) \/ (Even n /\ Odd m)).
+```
+
+```rocq
+plusEven : forall n m, Even (n + m) -> (Even n /\ Even m) \/ (Odd  n /\ Odd m)
+plusOdd  : forall n m, Odd  (n + m) -> (Odd  n /\ Even m) \/ (Even n /\ Odd m))
+n, m : nat
+------------------------------------------- (1/2)
+(Even n /\ Even m) \/ (Odd  n /\ Odd m)
+------------------------------------------- (2/2)
+(Odd  n /\ Even m) \/ (Even n /\ Odd m))
+```
+
+The idea with this setup is to be able to prove these lemmas by mutual recursion,
+explicitly calling the other lemma on mutual subarguments.
+The danger here is the same as proofs by mutual recursion in Lean:
+the user has to make sure to only instantiate mutual lemmas on structurally smaller arguments,
+or else specify a different termination metric altogether.
+
+### Isabelle
 
 # Towards nested induction: `mk_all`
 
