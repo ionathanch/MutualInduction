@@ -483,6 +483,8 @@ explicitly calling the other lemma on mutual subarguments.
 The danger here is the same as proofs by mutual recursion in Lean:
 the user has to make sure to only instantiate mutual lemmas on structurally smaller arguments,
 or else specify a different termination metric altogether.
+However, such mutual top-level declarations would be useful for `mutual_induction`,
+as described in [Joint theorems](#joint-theorems).
 
 ### Isabelle
 
