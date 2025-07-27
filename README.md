@@ -93,7 +93,7 @@ along with additional instantiations or introductions.
 
 The aim of this mutual induction tactic is to alleviate this manipulation tedium
 by avoiding conjunctions altogether.
-To demonstrate, we prove an inversion theorem about parity addition:
+To demonstrate, we prove an inversion theorem about parity of addition:
 if the addition of two naturals is even, then they are either both even or both odd;
 and if the addition of two naturals is odd, then one must be even and the other odd.
 
@@ -487,6 +487,60 @@ However, such mutual top-level declarations would be useful for `mutual_inductio
 as described in [Joint theorems](#joint-theorems).
 
 ### Isabelle
+
+<small>*I am not an Isabelle user and haven't tested any code,
+  so this information may be inaccurate.*</small>
+
+The Isar proof language for Isabelle provides an induction tactic
+that appears to work adequately on mutual inductives as well.
+Considering again the even/odd predicates,
+the inversion lemma on parity of addition is stated mutually.
+
+```isabelle
+inductive even and odd where
+  "even 0"
+| "even n ⟹ odd  (n + 1)"
+| "odd  n ⟹ even (n + 1)"
+
+lemma
+  fixes n m :: 'a
+  shows
+    "even (n + m) ⟹ (even n ∧ even m) ∨ (odd  n ∧ odd m)" and
+    "odd  (n + m) ⟹ (odd  n ∧ even m) ∨ (even m ∧ odd m)"
+```
+
+The proof proceeds by applying induction, which has the general form
+(assuming two goals, but more can be conjoined by `and`):
+
+```
+induct (x = t)... and (y = u)... arbitrary: v... and w... rule: R
+```
+
+corresponding roughly to first `generalize t = x; ...` and `generalize u = y; ...`
+on the antecedents of the first and second goals respectively,
+then induction on those antecedents generalizing `v...` and `w...` respectively,
+using the induction principle `R`.
+Even if generalization is not needed,
+the indices of each inductive at the very least need to all be provided.
+So to continue our proof above,
+
+```isabelle
+apply (
+  induct (k = n + m) and (k = n + m)
+  arbitrary: n and n
+  rule: even_odd.inducts
+)
+```
+
+should advance the proof to the three cases for each constructor.
+The advantage of this `and` syntax, in particular for `arbitrary`,
+is that different goals can have different arguments generalized;
+the disadvantage is that if all goals generalize the same argument,
+they still must be specified for each goal.
+Additionally, if only the last of four goals needs an argument generalized,
+it would require writing `arbitrary: and and and n`.
+
+Reference: [The Isabelle/Isar Reference Manual](https://isabelle.in.tum.de/doc/isar-ref.pdf#subsection.6.5.2)
 
 # Towards nested induction: `mk_all`
 
