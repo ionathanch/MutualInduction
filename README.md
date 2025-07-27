@@ -512,7 +512,7 @@ lemma
 The proof proceeds by applying induction, which has the general form
 (assuming two goals, but more can be conjoined by `and`):
 
-```
+```isabelle
 induct (x = t)... and (y = u)... arbitrary: v... and w... rule: R
 ```
 
