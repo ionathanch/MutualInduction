@@ -230,7 +230,7 @@ def mkAllDef (indVal : InductiveVal) (recVal : RecursorVal) (αnames : Array Nam
     let allParams := params ++ motives ++ indices ++ #[major]
     let allType ← mkForallFVars allParams (.sort rlvl)
     let allExpr ← mkLambdaFVars allParams recApp
-    mkDefinitionValInferrringUnsafe all allLvlParams allType allExpr .abbrev
+    mkDefinitionValInferringUnsafe all allLvlParams allType allExpr .abbrev
   pure <| .defnDecl decl
 
 def mkAllInductive (ind : Name) (params : Array Name) : MetaM Unit := do
