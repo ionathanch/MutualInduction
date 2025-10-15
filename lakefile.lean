@@ -4,6 +4,11 @@ open Lake DSL
 
 package «MutualInduction» where
 
+version := v!"0.1.0"
+description := "A mutual induction tactic for Lean 4."
+license := "Zlib"
+reservoir := true
+
 @[default_target]
 lean_lib «MutualInduction» where
   leanOptions := #[⟨`autoImplicit, false⟩]

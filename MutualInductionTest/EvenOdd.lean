@@ -151,7 +151,7 @@ theorem brecOn
   constructor
   case' left  => intro n en; apply he
   case' right => intro n on; apply ho
-  mutual_induction on, en
+  mutual_induction on, en using Odd.rec, Even.rec
   case zero => exact Even.below.zero
-  case left.succ  ih => exact Even.below.succ _ ih (ho ih)
-  case right.succ ih => exact Odd.below.succ  _ ih (he ih)
+  case left.succ  ih => exact Even.below.succ _ _ ih (ho ih)
+  case right.succ ih => exact Odd.below.succ  _ _ ih (he ih)
