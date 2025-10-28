@@ -11,6 +11,7 @@ reservoir := true
 
 @[default_target]
 lean_lib «MutualInduction» where
+  roots := #[`MutualInduction, `Joint]
   leanOptions := #[⟨`autoImplicit, false⟩]
 
 @[default_target]
