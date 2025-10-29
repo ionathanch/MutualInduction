@@ -28,7 +28,7 @@ instance : Coe (TSyntax binderKinds) (TSyntax `Lean.Parser.Term.funBinder) where
   coe stx := ⟨stx.raw⟩
 
 def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
-  `(PSigma.mk (∀ $thm.vars* $thm.binders*, $thm.sig) (λ $thm.vars* $thm.binders* ↦ ?$thm.name))
+  `(PSigma.mk _ (λ $thm.vars* $thm.binders* ↦ @id $thm.sig ?$thm.name))
 
 def mkJointName (names : Array Name) : Name :=
   match names.foldl append (Name.mkStr1 "") with
@@ -40,25 +40,17 @@ def mkJointName (names : Array Name) : Name :=
       .str n s!"{s₁}_{s₂}"
     | n, _ => n
 
-def mkJointDef (info : SourceInfo) (thms : Array TheoremDecl) (tactics : Syntax.TSepArray `tactic "")
-  : MacroM (Command × TSyntax `ident) := do
+def mkJointDef (byTk : Syntax) (thms : Array TheoremDecl) (tactics : Syntax.TSepArray `tactic "") :
+    MacroM (Command × TSyntax `ident) := do
   let name := mkJointName (thms.map (·.name.getId))
-  let id : Syntax := Syntax.ident .none default name []
-  let tid : TSyntax `ident := {raw := id : TSyntax (Syntax.getKind id)}
+  let tid : Ident := mkIdent name
   let pairs ← thms.mapM mkThmPair
-  let defn ← `(command|
-    def $tid : Array (PSigma (fun (A : Sort _) ↦ A)) := by
-      refine #[$pairs,*]
-      $tactics*)
-  let _defn : TSyntax `command :=
-    {raw := defn.raw.modifyArg 1 λ stx ↦
-      stx.modifyArg 3 λ stx ↦
-        stx.modifyArg 1 λ stx ↦
-          stx.setHeadInfo info }
+  let byBlock ← withRef byTk `(term| by refine #[$pairs,*]; $tactics*)
+  let defn ← `(command| def $tid : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
   return (defn, tid)
 
 def mkNthThm (id : TSyntax `ident) (n : Nat) (thm : TheoremDecl) : MacroM Command := do
-  let nstx := Syntax.mkNumLit (toString n)
+  let nstx := Syntax.mkNatLit n
   if thm.univs.isEmpty then
     `(command| theorem $thm.name : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$nstx].snd)
   else
@@ -67,8 +59,7 @@ def mkNthThm (id : TSyntax `ident) (n : Nat) (thm : TheoremDecl) : MacroM Comman
 @[macro «joint»]
 def expandJoint : Macro := λ stx ↦ do
   match stx with
-  | `(command| joint $vars* $thms:theoremDecl* by $tactics:tactic*) =>
-    let byInfo := stx.getArgs[3]!.getHeadInfo
+  | `(command| joint $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
     let thmDecls ← thms.mapM (λ (thm : TSyntax `theoremDecl) ↦ do
       match thm with
       | `(theoremDecl| theorem $name.{$univs,*} $binders* : $sig) =>
@@ -78,7 +69,7 @@ def expandJoint : Macro := λ stx ↦ do
         dbg_trace (name, binders, sig)
         return {name, univs := #[], vars, binders, sig : TheoremDecl}
       | _ => throwUnsupported)
-    let (jointDef, name) ← mkJointDef byInfo thmDecls tactics
+    let (jointDef, name) ← mkJointDef byTk thmDecls tactics
     let nthThms ← thmDecls.mapIdxM (mkNthThm name)
     return mkNullNode (#[jointDef] ++ nthThms)
   | _ => throwUnsupported
