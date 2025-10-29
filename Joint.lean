@@ -9,16 +9,21 @@ open Lean.Parser.Command
 declare_syntax_cat theoremDecl
 
 syntax "theorem " ident ppIndent(declSig) : theoremDecl
+def binder := bracketedBinder (requireType := true)
+
 syntax (name := joint)
-  "joint" (".{" ident,+ "}")? (ident <|> hole <|> bracketedBinder)*
+  "joint" (".{" ident,+ "}")? binder*
     theoremDecl+ byTactic' : command
 
 def binderKinds : SyntaxNodeKinds :=
   [`ident, `Lean.Parser.Term.hole, `Lean.Parser.Term.bracketedBinder]
 
+instance : Coe (TSyntax binderKinds) (TSyntax `Lean.Parser.Term.funBinder) where
+  coe stx := ⟨stx.raw⟩
+
 structure JointVars where
   univs : TSyntaxArray `ident
-  binders : TSyntaxArray binderKinds
+  binders : TSyntaxArray `Lean.Parser.Term.bracketedBinder
 
 structure TheoremDecl where
   /-- Syntax object of `theorem` keyword -/
@@ -27,19 +32,6 @@ structure TheoremDecl where
   binders : TSyntaxArray binderKinds
   /-- Result type of declaration -/
   sig : TSyntax `term
-
-instance : Coe (TSyntax binderKinds) (TSyntax `Lean.Parser.Term.funBinder) where
-  coe stx := ⟨stx.raw⟩
-
-/--
-Given a theorem declaration of the form
-  `theorem thm (x : A)... : B`,
-create the pair
-  `⟨(∀ (x : A)..., B), (λ (x : A)... ↦ ?thm)⟩`
-of type `(Σ' A : Sort _, A)`.
--/
-def mkThmPair (jnt : JointVars) (thm : TheoremDecl) : MacroM (TSyntax `term) := do
-  `(PSigma.mk (∀ $jnt.binders* $thm.binders*, $thm.sig) (λ $jnt.binders* $thm.binders* ↦ ?$thm.name))
 
 /-- Join a sequence of names by underscores,
 preceded and postceded by underscores. -/
@@ -53,6 +45,26 @@ def mkJointName (names : Array Name) : Name :=
       .str n s!"{s₁}_{s₂}"
     | n, _ => n
 
+/-- Get the bound variable `x` in a typed bracketed binder
+`(x : A)`, `{x : A}`, `⦃x : A⦄`, or `{{x : A}}`. -/
+def getBoundVars (binder : TSyntax `Lean.Parser.Term.bracketedBinder) : TSyntaxArray `ident :=
+  match binder with
+  | `(binder|  ($xs:ident* : $_:term))
+  | `(binder|  {$xs:ident* : $_:term})
+  | `(binder|  ⦃$xs:ident* : $_:term⦄)
+  | `(binder| {{$xs:ident* : $_:term}}) => xs
+  | _ => #[]
+
+/--
+Given a theorem declaration of the form
+  `theorem thm (x : A)... : B`,
+create the pair
+  `⟨(∀ (x : A)..., B), (λ (x : A)... ↦ ?thm)⟩`
+of type `(Σ' A : Sort _, A)`.
+-/
+def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
+  `(PSigma.mk (∀ $thm.binders*, $thm.sig) (λ $thm.binders* ↦ ?$thm.name))
+
 /--
 Given `n` theorems `thmᵢ : Aᵢ`, create a definition named `_thm₁_..._thmₙ_`
 with a heterogeneous array of proofs of `Aᵢ`.
@@ -62,13 +74,13 @@ that should then be solved by the given `tactics`.
 def mkJointDef (jnt : JointVars) (thms : Array TheoremDecl) (byTk : Syntax) (tactics : Syntax.TSepArray `tactic "") :
     MacroM (Command × TSyntax `ident) := do
   let id := mkIdent <| mkJointName (thms.map (·.name.getId))
-  let pairs ← thms.mapM (mkThmPair jnt)
+  let pairs ← thms.mapM mkThmPair
   let byBlock ← withRef byTk `(term| by refine #[$pairs,*]; $tactics*)
   let defn ←
     if jnt.univs.isEmpty then
-      `(command| abbrev $id : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
+      `(command| abbrev $id $jnt.binders* : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
     else
-      `(command| abbrev $id.{$jnt.univs,*} : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
+      `(command| abbrev $id.{$jnt.univs,*} $jnt.binders* : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
   return (defn, id)
 
 /--
@@ -78,11 +90,12 @@ Note it must be that `_thm₁_..._thmₙ_[i].fst = Aₙ`.
 -/
 def mkNthThm (id : TSyntax `ident) (jnt : JointVars) (i : Nat) (thm : TheoremDecl) : MacroM Command := do
   let istx := Syntax.mkNatLit i
+  let args := Array.flatten <| jnt.binders.map getBoundVars
   let nthThm ← withRef thm.stx <|
     if jnt.univs.isEmpty then
-      `(command| theorem $thm.name : ∀ $jnt.binders* $thm.binders*, $thm.sig := $id[$istx].snd)
+      `(command| theorem $thm.name $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id $args*)[$istx].snd)
     else
-      `(command| theorem $thm.name.{$jnt.univs,*} : ∀ $jnt.binders* $thm.binders*, $thm.sig := $id.{$jnt.univs,*}[$istx].snd)
+      `(command| theorem $thm.name.{$jnt.univs,*} $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id.{$jnt.univs,*} $args*)[$istx].snd)
   `(command| set_option linter.unusedVariables false in $nthThm)
 
 /--
