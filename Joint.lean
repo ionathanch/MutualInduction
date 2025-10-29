@@ -7,23 +7,23 @@ open Lean.Parser.Term
 open Lean.Parser.Command
 
 declare_syntax_cat theoremDecl
-declare_syntax_cat binder
 
 syntax "theorem " ident ppIndent(declSig) : theoremDecl
 syntax (name := joint)
-  "joint" (ident <|> hole <|> bracketedBinder)*
+  "joint" (".{" ident,+ "}")? (ident <|> hole <|> bracketedBinder)*
     theoremDecl+ byTactic' : command
 
 def binderKinds : SyntaxNodeKinds :=
   [`ident, `Lean.Parser.Term.hole, `Lean.Parser.Term.bracketedBinder]
 
+structure JointVars where
+  univs : TSyntaxArray `ident
+  binders : TSyntaxArray binderKinds
+
 structure TheoremDecl where
   /-- Syntax object of `theorem` keyword -/
   stx : Syntax
   name : TSyntax `ident
-  /-- Binders shared with other declarations -/
-  vars : TSyntaxArray binderKinds
-  /-- Binders of this declaration only -/
   binders : TSyntaxArray binderKinds
   /-- Result type of declaration -/
   sig : TSyntax `term
@@ -38,8 +38,8 @@ create the pair
   `⟨(∀ (x : A)..., B), (λ (x : A)... ↦ ?thm)⟩`
 of type `(Σ' A : Sort _, A)`.
 -/
-def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
-  `(PSigma.mk (∀ $thm.vars* $thm.binders*, $thm.sig) (λ $thm.vars* $thm.binders* ↦ ?$thm.name))
+def mkThmPair (jnt : JointVars) (thm : TheoremDecl) : MacroM (TSyntax `term) := do
+  `(PSigma.mk (∀ $jnt.binders* $thm.binders*, $thm.sig) (λ $jnt.binders* $thm.binders* ↦ ?$thm.name))
 
 /-- Join a sequence of names by underscores,
 preceded and postceded by underscores. -/
@@ -59,12 +59,16 @@ with a heterogeneous array of proofs of `Aᵢ`.
 The body of the definition is a refined array of holes `?thmᵢ : A_i`
 that should then be solved by the given `tactics`.
 -/
-def mkJointDef (byTk : Syntax) (thms : Array TheoremDecl) (tactics : Syntax.TSepArray `tactic "") :
+def mkJointDef (jnt : JointVars) (thms : Array TheoremDecl) (byTk : Syntax) (tactics : Syntax.TSepArray `tactic "") :
     MacroM (Command × TSyntax `ident) := do
   let id := mkIdent <| mkJointName (thms.map (·.name.getId))
-  let pairs ← thms.mapM mkThmPair
+  let pairs ← thms.mapM (mkThmPair jnt)
   let byBlock ← withRef byTk `(term| by refine #[$pairs,*]; $tactics*)
-  let defn ← `(command| abbrev $id : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
+  let defn ←
+    if jnt.univs.isEmpty then
+      `(command| abbrev $id : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
+    else
+      `(command| abbrev $id.{$jnt.univs,*} : Array (PSigma fun (A : Sort _) ↦ A) := $byBlock)
   return (defn, id)
 
 /--
@@ -72,17 +76,21 @@ The `i`th theorem is proven by the `i`th element of the jointly defined array:
   `theorem thmₙ : Aₙ := _thm₁_..._thmₙ_[i].snd`.
 Note it must be that `_thm₁_..._thmₙ_[i].fst = Aₙ`.
 -/
-def mkNthThm (id : TSyntax `ident) (i : Nat) (thm : TheoremDecl) : MacroM Command := do
+def mkNthThm (id : TSyntax `ident) (jnt : JointVars) (i : Nat) (thm : TheoremDecl) : MacroM Command := do
   let istx := Syntax.mkNatLit i
-  let nthThm ← withRef thm.stx `(command| theorem $thm.name : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$istx].snd)
+  let nthThm ← withRef thm.stx <|
+    if jnt.univs.isEmpty then
+      `(command| theorem $thm.name : ∀ $jnt.binders* $thm.binders*, $thm.sig := $id[$istx].snd)
+    else
+      `(command| theorem $thm.name.{$jnt.univs,*} : ∀ $jnt.binders* $thm.binders*, $thm.sig := $id.{$jnt.univs,*}[$istx].snd)
   `(command| set_option linter.unusedVariables false in $nthThm)
 
 /--
 Given theorem statements of the form `theorem thm (y : B)... : C`,
-possibly sharing joint variables `(x : A)...`,
+possibly sharing joint universe variables `u...` and term variables `(x : A)...`,
 the joint theorem declaration
 ```
-joint (x : A)...
+joint.{u...} (x : A)...
   theorem thm (y : B)... : C
   ...
 by ...
@@ -103,15 +111,18 @@ the proof environment contains two goals:
 -/
 @[macro «joint»]
 def expandJoint : Macro := λ stx ↦ do
+  let univs : Syntax.TSepArray `ident "," := {}
   match stx with
-  | `(command| joint $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
+  | `(command| joint $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*)
+  | `(command| joint.{$univs,*} $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
+    let jointVars : JointVars := {univs, binders := vars}
     let thmDecls ← thms.mapM (λ (thm : TSyntax `theoremDecl) ↦ do
       match thm with
       | `(theoremDecl| theorem%$thmTk $name:ident $binders* : $sig) =>
-        return {stx := thmTk, name, vars, binders, sig : TheoremDecl}
+        return {stx := thmTk, name, binders, sig : TheoremDecl}
       | _ => throwUnsupported)
-    let (jointDef, name) ← mkJointDef byTk thmDecls tactics
-    let nthThms ← thmDecls.mapIdxM (mkNthThm name)
+    let (jointDef, name) ← mkJointDef jointVars thmDecls byTk tactics
+    let nthThms ← thmDecls.mapIdxM (mkNthThm name jointVars)
     return mkNullNode (#[jointDef] ++ nthThms)
   | _ => throwUnsupported
 
