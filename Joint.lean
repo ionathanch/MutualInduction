@@ -28,7 +28,7 @@ instance : Coe (TSyntax binderKinds) (TSyntax `Lean.Parser.Term.funBinder) where
   coe stx := ⟨stx.raw⟩
 
 def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
-  `(PSigma.mk _ (λ $thm.vars* $thm.binders* ↦ @id $thm.sig ?$thm.name))
+  `(PSigma.mk (∀ $thm.vars* $thm.binders*, $thm.sig) (λ $thm.vars* $thm.binders* ↦ ?$thm.name))
 
 def mkJointName (names : Array Name) : Name :=
   match names.foldl append (Name.mkStr1 "") with
@@ -52,9 +52,15 @@ def mkJointDef (byTk : Syntax) (thms : Array TheoremDecl) (tactics : Syntax.TSep
 def mkNthThm (id : TSyntax `ident) (n : Nat) (thm : TheoremDecl) : MacroM Command := do
   let nstx := Syntax.mkNatLit n
   if thm.univs.isEmpty then
-    `(command| theorem $thm.name : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$nstx].snd)
+    `(command|
+      set_option linter.unusedVariables false in
+      theorem $thm.name : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$nstx].snd
+    )
   else
-    `(command| theorem $thm.name.{$thm.univs,*} : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$nstx].snd)
+    `(command|
+      set_option linter.unusedVariables false in
+      theorem $thm.name.{$thm.univs,*} : ∀ $thm.vars* $thm.binders*, $thm.sig := $id[$nstx].snd
+    )
 
 @[macro «joint»]
 def expandJoint : Macro := λ stx ↦ do
