@@ -458,15 +458,15 @@ Otherwise, add the goal to the current list of goals.
 -/
 def addSubgoal (subgoal : Alt) : TacticM Unit := do
   let ⟨ihs, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
-    let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
-    let punits ← mvarId.withContext <| ihs.filterM isPUnit
-    let mvarId ← mvarId.tryClearMany punits
-    if subgoal.trivial then
-      let mvarIds ← mvarId.constructor
-      unless mvarIds.isEmpty do
-        throwTacticEx `mutual_induction mvarId
-          m!"could not solve generated subgoal {subgoal.name}"
-    else pushGoal mvarId
+  let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
+  let punits ← mvarId.withContext <| ihs.filterM isPUnit
+  let mvarId ← mvarId.tryClearMany punits
+  if subgoal.trivial then
+    let mvarIds ← mvarId.constructor
+    unless mvarIds.isEmpty do
+      throwTacticEx `mutual_induction mvarId
+        m!"could not solve generated subgoal {subgoal.name}"
+  else pushGoal mvarId
   where
     isPUnit (ih : FVarId) : TacticM Bool := do
       let ihType ← ih.getType >>= instantiateMVars
