@@ -8,9 +8,10 @@
   3. [Generalize variables and compute motives](#3-generalize-variables-and-compute-motives)
   4. [Apply recursors](#4-apply-recursors)
   5. [Deduplicate subgoals](#5-deduplicate-subgoals)
+  6. [Add subgoals](#6-add-subgoals)
 * [Extensions](#extensions)
-  * [Joint theorems](#joint-theorems)
-  * [`using` and `with` clauses](#using-and-with-clauses)
+  * [Transposed clauses](#transposed-clauses)
+  * [`with` clauses](#with-clauses)
 * [Mutual induction in other proof assistants](#mutual-induction-in-other-proof-assistants)
   * [Rocq](#rocq)
   * [Isabelle](#isabelle)
@@ -24,6 +25,17 @@ or for generalizing different variables in each goal.
 
 ```lean
 mutual_induction x₁, ..., xₙ (using r₁, ..., rₙ)? (generalizing y₁ ... yₘ)?
+```
+
+Generating multiple goals can be done using existing declarations refinement tactics,
+but a convenient `joint theorem` declaration form is also provided.
+
+```lean
+joint (y₁ : A₁) ... (yₘ : Aₘ)
+  theorem thm₁ x₁ : B₁
+  ...
+  theorem thmₙ xₙ : Bₙ
+by [tactics]
 ```
 
 The doc comment for the tactic gives an example using mutual even/odd naturals,
@@ -99,12 +111,12 @@ if the addition of two naturals is even, then they are either both even or both 
 and if the addition of two naturals is odd, then one must be even and the other odd.
 
 ```lean
-theorem plusEvenOdd (n : Nat) (m : Nat) :
-  (Even (n + m) → (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)) ∧
-  (Odd  (n + m) → (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)) := by
-  constructor
-  case' right => intro onm; generalize e₂ : n + m = k₂ at onm
-  case' left  => intro enm; generalize e₁ : n + m = k₁ at enm
+joint (n : Nat) (m : Nat)
+  theorem evenAddInv (onm : Even (n + m)) : (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)
+  theorem oddAddInv  (enm : Odd  (n + m)) : (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)
+by
+  case' evenAddInv => generalize e₂ : n + m = k₂ at onm
+  case' oddAddInv  => generalize e₁ : n + m = k₁ at enm
 ```
 
 We wish induct on the proofs of `Even (n + m)` and `Odd (n + m)`.
@@ -114,13 +126,13 @@ so we generalize `n + m` over an equality.
 The proof state now looks like the below.
 
 ```lean
-▼ case left
+▼ case evenAddInv
 n m k₁ : Nat
 e₁ : n + m = k₁
 enm : Even k₁
 ⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case right
+▼ case oddAddInv
 n m k₂ : Nat
 e₂ : n + m = k₂
 onm : Odd k₂
@@ -132,12 +144,12 @@ which says that we are doing induction on `enm` in goal `left` and on `onm` in g
 It yields the following goals.
 
 ```lean
-▼ case left.zero
+▼ case evenAddInv.zero
 m n : Nat
 e₁ : n + m = 0
 ⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case left.succ
+▼ case evenAddInv.succ
 m k₁ : Nat
 ok : Odd k₁
 ih : ∀ (n : Nat), n + m = k₁ → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
@@ -145,7 +157,7 @@ n : Nat
 e₁ : n + m = k₁ + 1
 ⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case right.succ
+▼ case oddAddInv.succ
 m k₂ : Nat
 ek : Even k₂
 ih : ∀ (n : Nat), n + m = k₂ → (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
@@ -168,10 +180,11 @@ The tactic proceeds in stages:
 3. Compute more information from all goals in tandem.
 4. Apply the appropriate recursor for each goal.
 5. Combine duplicate subgoals from the recursors.
+6. Add subgoals to the proof state, (re)introducing variables.
 
 ### 1. Compute targets and generalized variables
 
-The user specifies that the target of `left` is `enm` and the target of `right` is `onm`.
+The user specifies that the target of `evenAddInv` is `enm` and the target of `oddAddInv` is `onm`.
 However, the indices of their types are considered as auxiliary targets
 because the motives need to abstract over them as well.
 This would be `k₁` and `k₂` in their respective goals.
@@ -210,7 +223,7 @@ we also need to ensure that
 * The targets each belong to a *different* inductive type; and
 * ~~The targets belong to *all* of the mutual inductive types.~~
 
-These conditions ensure that we have the right motives needed
+These conditions ensure that we have the correct motives needed
 to apply the recursors to each goal.
 If a motive is missing due to a missing target for one of the inductive types,
 then ~~we add that motive as an additional goal~~
@@ -236,14 +249,14 @@ Only now do we finally generalize the variables
 and compute the motives by abstracting the goals over the targets.
 
 ```lean
-▼ case left
+▼ case evenAddInv
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
   ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 ⊢ ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 
-▼ case right
+▼ case oddAddInv
 m k₂ : Nat
 onm : Odd k₂
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
@@ -271,32 +284,32 @@ so we can retrieve the recursor and instantiate it with the motives and targets,
 leaving the remaining arguments as subgoals to be solved.
 
 ```lean
-▼ case left
+▼ case evenAddInv
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
   ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
   ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
-⊢ @Even.rec motive_1 motive_2 ?left.Even.zero ?left.Even.succ ?left.Odd.succ k₁ enm
+⊢ @Even.rec motive_1 motive_2 ?evenAddInv.Even.zero ?evenAddInv.Even.succ ?evenAddInv.Odd.succ k₁ enm
   : ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case right
+▼ case oddAddInv
 m k₂ : Nat
 onm : Odd k₂
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
   ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
   ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
-⊢ @Odd.rec motive_1 motive_2 ?right.Even.zero ?right.Even.succ ?right.Odd.succ k₁ enm
+⊢ @Odd.rec motive_1 motive_2 ?oddAddInv.Even.zero ?oddAddInv.Even.succ ?oddAddInv.Odd.succ k₁ enm
   : ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
 The subgoals are collected up as a 2D array.
 
 ```lean4
-[[?left.Even.zero,  ?left.Even.succ,  ?left.Odd.succ],
- [?right.Even.zero, ?right.Even.succ, ?right.Odd.succ]]
+[[?evenAddInv.Even.zero, ?evenAddInv.Even.succ, ?evenAddInv.Odd.succ],
+ [?oddAddInv.Even.zero,  ?oddAddInv.Even.succ,  ?oddAddInv.Odd.succ]]
 ```
 
 This work is done by `Lean.Elab.Tactic.evalSubgoal`.
@@ -311,36 +324,64 @@ We intuitively expect the prefix of the name of the subgoal for a particular con
 to match the original goal whose target's inductive type contains that constructor.
 Picking the subgoals that prove the motive that applies to the parent goal's target
 ensures that we get the correct name.
+Once they have been picked, the inductive type's name can be removed from the subgoal's name.
 
 ```lean
-▼ case left.Even.zero
+▼ case evenAddInv.Even.zero
 m : Nat
 ⊢ ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case left.Even.succ
+▼ case evenAddInv.Even.succ
 m : Nat
 ⊢ ∀ (k₁ : Nat) (enm : Even k₁),
   (∀ (n : Nat), n + m = k₁ → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)) →
   ∀ (n : Nat) (e₁ : n + m = k₁ + 1), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
-▼ case right.Odd.succ
+▼ case oddAddInv.Odd.succ
 m : Nat
 ⊢ ∀ (k₁ : Nat) (enm : Even k₁),
   (∀ (n : Nat), n + m = k₂ → Even n ∧ Even m ∨ Odd n ∧ Odd m) →
   ∀ (n : Nat) (e₂ : n + m = k₂ + 1), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 
-▶ case right.Even.zero := left.Even.zero
-▶ case right.Even.succ := left.Even.succ
-▶ case left.Odd.succ   := right.Odd.succ
+▶ case oddAddInv.Even.zero := evenAddInv.Even.zero
+▶ case oddAddInv.Even.succ := evenAddInv.Even.succ
+▶ case evenAddInv.Odd.succ := oddAddInv.Odd.succ
 ```
 
-To clean up, we remove the name of the inductive type from the goal,
-then intros the constructor arguments, the induction hypotheses,
-and the generalized variables.
+This work is done by `Lean.Elab.Tactic.deduplicate`.
+
+### 6. Add subgoals
+
+Each subgoal is added to the proof state's list of goals,
+but only after (re)introducing into the context
+the constructor arguments, the induction hypotheses, and the generalized variables.
 If the goal is trivially `PUnit`, it gets solved by its constructor.
 If an induction hypothesis is the trivial `PUnit`, it gets cleared away.
 
-This work is done by `Lean.Elab.Tactic.deduplicate`.
+```lean
+▼ case evenAddInv.zero
+m n : Nat
+e₁ : n + m = 0
+⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
+
+▼ case evenAddInv.succ
+m k₁ : Nat
+enm : Even k₁
+ih : ∀ (n : Nat), n + m = k₁ → (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
+n : Nat
+e₁ : n + m = k₁ + 1
+⊢ (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
+
+▼ case oddAddInv.succ
+m k₁ : Nat
+enm : Even k₁
+ih : ∀ (n : Nat), n + m = k₂ → Even n ∧ Even m ∨ Odd n ∧ Odd m
+n : Nat
+e₂ : n + m = k₂ + 1
+⊢ (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
+```
+
+This work is done by `Lean.Elab.Tactic.addSubgoal`.
 
 ## Extensions
 
@@ -349,31 +390,9 @@ A simple one is adding an option to keep missing motives as additional goals
 instead of filling them with `PUnit`, but this use case seems rare.
 Below are other more elaborate potential extensions.
 
-### Joint theorems
+### Transposed clauses
 
-Currently, the best way to state mutually-proven theorems is with a conjunction,
-splitting it into multiple goals.
-This means that using such theorems individually requires splitting apart the conjunction first,
-which is unwieldly and verbose.
-In the [Zulip topic](https://leanprover.zulipchat.com/#narrow/channel/239415-metaprogramming-.2F-tactics/topic/mutual.20induction.20tactic/near/504421657),
-there were discussions on introducing joint theorem syntax,
-which would define at the top level multiple independent theorems
-but open all of them as goals in a single proof state.
-For example, the `plusEvenOdd` theorem could be split into two,
-at the same time introducing named variables in each context.
-
-```lean
-joint (n : Nat) (m : Nat)
-theorem plusEven (enm : Even (n + m)) : (Even n ∧ Even m) ∨ (Odd  n ∧ Odd m)
-theorem plusOdd  (onm : Odd  (n + m)) : (Odd  n ∧ Even m) ∨ (Even n ∧ Odd m)
-by
-  case' plusOdd  => generalize e₂ : n + m = k₂ at onm
-  case' plusEven => generalize e₁ : n + m = k₁ at enm
-```
-
-The resulting proof state looks just like it did with `left` and `right`,
-and at this point is ready for mutual induction with
-`mutual_induction enm, onm generalizing n`.
+[!NOTE]: TODO
 
 ### `with` clauses
 
