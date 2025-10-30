@@ -9,6 +9,7 @@
   4. [Apply recursors](#4-apply-recursors)
   5. [Deduplicate subgoals](#5-deduplicate-subgoals)
   6. [Add subgoals](#6-add-subgoals)
+* [How do joint theorems work?](#how-do-joint-theorems-work)
 * [Extensions](#extensions)
   * [Transposed clauses](#transposed-clauses)
   * [`with` clauses](#with-clauses)
@@ -31,10 +32,10 @@ Generating multiple goals can be done using existing declarations refinement tac
 but a convenient `joint theorem` declaration form is also provided.
 
 ```lean
-joint (y₁ : A₁) ... (yₘ : Aₘ)
-  theorem thm₁ x₁ : B₁
+joint.{u,...}? ((y : A)...)?
+  theorem thm₁ x₁... : B₁
   ...
-  theorem thmₙ xₙ : Bₙ
+  theorem thmₙ xₙ... : Bₙ
 by [tactics]
 ```
 
@@ -383,6 +384,55 @@ e₂ : n + m = k₂ + 1
 
 This work is done by `Lean.Elab.Tactic.addSubgoal`.
 
+## How do joint theorems work?
+
+The general form of the joint theorem command is as follows:
+
+```lean
+joint.{u,...} (y : A)...
+  theorem thm₀ (x₀ : B₀)... : C₀
+  ...
+  theorem thmₙ (xₙ : Bₙ)... : Cₙ
+by [tactics]
+```
+
+The optional universe parameters `u, ...` and variables `y, ...`
+are bound within all of the theorems' types declarations.
+At the moment, shared universe parameters *must* be used in all theorems,
+as they will otherwise throw unused universe parameters errors.
+As usual, the binders `x₀..., ..., xₙ...` may also be (strict) implicit `{x : B}`, `⦃x : B⦄`,
+and the type annotation `B` may be omitted.
+The variables `y, ...` may similarly be (strict) implicit,
+but the type annotation `A` may *not* be omitted,
+as the way the command is expanded makes inferring their types difficult.
+
+The command first expands into an array of theorems and their proofs in proof mode.
+This definition's name is generated from the theorems' names,
+and is currently `_thms_ ≡ _thm₀_..._thmₙ_`.
+
+```lean
+def _thms_.{u,...} (y : A)... : Array (Σ P : Sort _, P) := by
+  refine #[
+    ⟨(∀ (x₁ : B₁)..., C₁), (λ (x₁ : B₁)... ↦ ?thm₀)⟩,
+    ...
+    ⟨(∀ (xₙ : Bₙ)..., Cₙ), (λ (xₙ : Bₙ)... ↦ ?thmₙ)⟩
+  ]
+  [tactics]
+```
+
+At the tactics' position, there is one goal named after each theorem,
+whose context contains the shared and bound variables,
+and whose type is the theorem's type.
+
+Subsequent theorem definitions are created for each theorem declaration,
+indexing into the array for their proofs.
+
+```lean
+def thm₀.{u,...} (y : A)... : ∀ (x₀ : B₀)..., C₀ := (@_thms_.{u,...} y...)[0].snd
+...
+def thmₙ.{u,...} (y : A)... : ∀ (xₙ : Bₙ)..., Cₙ := (@_thms_.{u,...} y...)[n].snd
+```
+
 ## Extensions
 
 There are many possible usability improvements for this tactic.
@@ -392,7 +442,44 @@ Below are other more elaborate potential extensions.
 
 ### Transposed clauses
 
-[!NOTE]: TODO
+The tactic's current syntax doesn't allow for
+generalizing different sets of variables in each goal,
+only generalizing the same set in all goals.
+We can imagine using comma-separated sets of generalized variables,
+just as the `using` clause takes comma-separated recursors.
+
+```lean
+mutual_induction x₁, ..., xₙ
+  (using r₁, ..., rₙ)?
+  (generalizing z₁..., ..., zₙ...)?
+```
+
+While `using` can *always* take recursors,
+`generalizing` might have goals with *no* generalized variables.
+Furthermore, generalizing the same variable in all goals
+now requires repeating that variable in all subclauses.
+This leads to slightly awkward notation in some situations.
+
+```lean
+mutual_induction x₁, x₂, x₃, x₄, x₅ generalizing ,,,,z
+mutual_induction x₁, x₂, x₃, x₄, x₅ generalizing z, z, z, z, z
+```
+
+An alternate syntax would be to transpose the goals,
+specifying the clauses for each one separately.
+We can refer to the goals by name this way,
+which frees us from specifying the targets in the fixed given order.
+
+```lean
+mutual_induction
+| goal₁ => x₁ (using r₁)? (generalizing z₁...)?
+...
+| goalₙ => xₙ (using rₙ)? (generalizing zₙ...)?
+```
+
+This is quite a bit wordier,
+but this could be added as an alternate expanded syntax
+alongside the current terser one.
 
 ### `with` clauses
 
@@ -402,10 +489,24 @@ and is sugar for subsequent `case` expressions.
 The syntax for the tactic with this clause might look something like the following.
 
 ```lean
-mutual_induction x₁ with
+mutual_induction x₁, ..., xₙ with
 | tag₁ z₁ ... zᵢ₁ => tac₁
 ...
 | tagₖ z₁ ... zᵢₖ => tacₖ
+```
+
+Combined with the transposed syntax from above, though, might be a bit unwieldy.
+
+```lean
+mutual_induction
+| goal₁ => x₁ generalizing z₂ z₃
+| goal₂ => x₂ generalizing z₁ z₃
+| goal₃ => x₃ generalizing z₁ z₂
+with
+| goal₁.tag₁ y => tac₁
+| goal₁.tag₂ y => tac₂
+| goal₂.tag₁ y => tac₃
+| goal₃.tag₁ y => tac₄
 ```
 
 ## Mutual induction in other proof assistants
@@ -682,59 +783,3 @@ The design of `Lean.Meta.MkAll.mkAllDef` and `Lean.Meta.MkAll.mkIAllDef`
 are based on `Lean.Meta.BRecOn.mkBelowOrIBelow` and `Lean.Meta.IndPredBelow.mkBelow` respectively,
 so the proof search for the eliminators will likely follow the design of
 `Lean.Meta.BRecOn.mkBRecOn` and `Lean.Meta.BRecOn.mkBInductionOn`.
-
-<!--
-Let `Γ` and `Δ` represent telescopes.
-Generally, a set of mutual inductive types consists of a set of inductive types
-that share a common telescope of parameters:
-
-```lean
-inductive I₁ Γ : Γ₁ → Sort
-...
-inductive Iₙ Γ : Γₙ → Sort
-```
-
-along with a set of constructors for these inductive types:
-
-```lean
-  | c₁ : Δ₁ → Ξ₁ → Iᵢ₁
-  ...
-  | cₘ : Δₘ → Ξₘ → Iᵢₘ
-```
-
-where `Ξᵢ` is a nondependent telescope of the form:
-
-```lean
-  (Δᵢ₁ → Iᵢⱼ₁) → ... → (Δᵢₖ → Iᵢⱼₖ)
-```
-
-with `i₁, ..., iₘ, ij₁, ..., ijₖ ∈ [1..n]`,
-and none of `I₁, ..., Iₙ, c₁, ..., cₘ` are free in any `Γ`, `Δ`.
-For each inductive, a recursor is generated,
-all of which take the same parameters `ps : Γ`, `n` motives, and `m` cases.
-The motives are of the form:
-
-```lean
-P₁ : ∀ (xs₁ : Γ₁), I₁ ps xs₁ → Sort
-...
-Pₙ : ∀ (xsₙ : Γₙ), Iₙ ps xsₙ → Sort
-```
-
-and the cases are of the form:
-
-```lean
-g₁ : ∀ (ys₁ : Δ₁) (hs₁ : Ξ₁),
-     (∀ (zs₁₁ : Δ₁₁), P₁ⱼ₁ _ (hs₁₁ zs₁₁)) →
-     ...
-     (∀ (zs₁ₖ : Δ₁ₖ), P₁ⱼₖ _ (hs₁ₖ zs₁ₖ)) →
-     Pᵢ₁ _ (c₁ ys₁ hs₁)
-...
-gₘ : ∀ (ysₘ : Δₘ) (hsₘ : Ξₘ),
-     (∀ (zsₘ₁ : Δₘ₁), Pₘⱼ₁ _ (hsₘ₁ zsₘ₁)) →
-     ...
-     (∀ (zsₘₖ : Δₘₖ), Pₘⱼₖ _ (hsₘₖ zsₘₖ)) →
-     Pᵢₘ _ (cₘ ysₘ hsₘ)
-```
-
-The recursor `Iᵢ.rec` then ends in `∀ (xsᵢ : Γᵢ) (h : Iᵢ ps xsᵢ), Pᵢ xsᵢ h`.
--->
