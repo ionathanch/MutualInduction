@@ -317,7 +317,7 @@ the target and its indices, its inductive type,
 the goal and its the free variables to generalize,
 and information about the eliminator to be applied.
 -/
-def getSubgoal (stxgoal : Syntax × Option Syntax × MVarId) : TacticM Goal :=
+def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × MVarId) : TacticM Goal :=
   let ⟨targetName, elim?, goal⟩ := stxgoal
   goal.withContext do
   let target ← elabTerm targetName none
@@ -486,7 +486,7 @@ which we deduplicate so that the user ony needs to solve one set of them.
 @[tactic mutual_induction]
 def evalMutualInduction : Tactic := λ stx ↦ do
   let tag ← getMainGoal >>= (·.getTag)
-  let ⟨targetNames, elims, genFVarNames⟩ := parse stx
+  let ⟨targetNames, elims, genFVarNames⟩ ← parse stx
   let elims ← countArgs (← getMainGoal) `eliminators targetNames.size elims
   let stxgoals := Array.zip targetNames (Array.zip elims (← getUnsolvedGoals).toArray)
   let subgoals ← stxgoals.mapM getSubgoal
@@ -499,17 +499,10 @@ def evalMutualInduction : Tactic := λ stx ↦ do
   let subgoals ← deduplicate tag tags subgoals
   for subgoal in subgoals.reverse do addSubgoal subgoal
   where
-    -- #["mutual_induction", #[x₁, ..., xₙ], #["using", #[z₁, ..., zₙ]]?, #["generalizing", #[y₁, ..., yₘ]]?]
-    parse (stx : Syntax) : Array Syntax × Option (Array Syntax) × Array Syntax :=
-      let targets := stx[1].getSepArgs
-      let elims? := stx[2].getArgs
-      let elims := match elims? with
-        | #[_, elims] => some elims.getSepArgs
-        | _ => none
-      let genVars? := stx[3].getArgs
-      let genVars := match genVars? with
-        | #[_, genVars] => genVars.getArgs
-        | _ => #[]
-      ⟨stx[1].getSepArgs, elims, genVars⟩
+    parse (stx : Syntax) := do
+      match stx with
+      | `(tactic| mutual_induction $targets,* $[using $elims,*]? $[generalizing $genVars*]?) =>
+        return (targets.getElems, elims.map Syntax.TSepArray.getElems, genVars.getD #[])
+      | _ => throwErrorAt stx "could not parse mutual_induction tactic"
 
 end Tactic
