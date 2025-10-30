@@ -124,11 +124,9 @@ the proof environment contains two goals:
 -/
 @[macro «joint»]
 def expandJoint : Macro := λ stx ↦ do
-  let univs : Syntax.TSepArray `ident "," := {}
   match stx with
-  | `(command| joint $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*)
-  | `(command| joint.{$univs,*} $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
-    let jointVars : JointVars := {univs, binders := vars}
+  | `(command| joint$[.{$univs,*}]? $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
+    let jointVars : JointVars := {univs := univs.getD {}, binders := vars}
     let thmDecls ← thms.mapM (λ (thm : TSyntax `theoremDecl) ↦ do
       match thm with
       | `(theoremDecl| theorem%$thmTk $name:ident $binders* : $sig) =>
