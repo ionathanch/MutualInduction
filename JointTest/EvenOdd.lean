@@ -71,7 +71,9 @@ by
   all_goals injection e with e; subst e; assumption
 
 joint {n m : Nat}
+  /-- even sums are either both even or both odd -/
   theorem plusEven (enm : Even (n + m)) : (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
+  /-- odd sums are even in one and odd in the other -/
   theorem plusOdd  (onm : Odd (n + m))  : (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 by
   case' plusOdd  => generalize e₂ : n + m = k₂ at onm

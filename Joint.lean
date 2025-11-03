@@ -8,7 +8,7 @@ open Lean.Parser.Command
 
 declare_syntax_cat theoremDecl
 
-syntax "theorem " ident ppIndent(declSig) : theoremDecl
+syntax declModifiers "theorem " ident ppIndent(declSig) : theoremDecl
 def binder := bracketedBinder (requireType := true)
 
 syntax (name := joint)
@@ -26,6 +26,8 @@ structure JointVars where
   binders : TSyntaxArray `Lean.Parser.Term.bracketedBinder
 
 structure TheoremDecl where
+  /-- Declaration modifiers -/
+  mods : TSyntax `Lean.Parser.Command.declModifiers
   /-- Syntax object of `theorem` keyword -/
   stx : Syntax
   name : TSyntax `ident
@@ -93,9 +95,9 @@ def mkNthThm (id : TSyntax `ident) (jnt : JointVars) (i : Nat) (thm : TheoremDec
   let args := Array.flatten <| jnt.binders.map getBoundVars
   let nthThm ← withRef thm.stx <|
     if jnt.univs.isEmpty then
-      `(command| theorem $thm.name $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id $args*)[$istx].snd)
+      `(command| $thm.mods:declModifiers theorem $thm.name $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id $args*)[$istx].snd)
     else
-      `(command| theorem $thm.name.{$jnt.univs,*} $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id.{$jnt.univs,*} $args*)[$istx].snd)
+      `(command| $thm.mods:declModifiers theorem $thm.name.{$jnt.univs,*} $jnt.binders* : ∀ $thm.binders*, $thm.sig := (@$id.{$jnt.univs,*} $args*)[$istx].snd)
   `(command| set_option linter.unusedVariables false in $nthThm)
 
 /--
@@ -129,8 +131,8 @@ def expandJoint : Macro := λ stx ↦ do
     let jointVars : JointVars := {univs := univs.getD {}, binders := vars}
     let thmDecls ← thms.mapM (λ (thm : TSyntax `theoremDecl) ↦ do
       match thm with
-      | `(theoremDecl| theorem%$thmTk $name:ident $binders* : $sig) =>
-        return {stx := thmTk, name, binders, sig : TheoremDecl}
+      | `(theoremDecl| $mods:declModifiers theorem%$thmTk $name:ident $binders* : $sig) =>
+        return {mods, stx := thmTk, name, binders, sig : TheoremDecl}
       | _ => throwUnsupported)
     let (jointDef, name) ← mkJointDef jointVars thmDecls byTk tactics
     let nthThms ← thmDecls.mapIdxM (mkNthThm name jointVars)
