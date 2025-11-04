@@ -1,15 +1,13 @@
-import Lean.Parser.Term
-import Lean.Parser.Command
+module
+
+public meta import Lean.Parser.Term
 
 namespace Lean.Macro
-
 open Lean.Parser.Term
-open Lean.Parser.Command
 
 declare_syntax_cat theoremDecl
-
 syntax declModifiers "theorem " ident ppIndent(declSig) : theoremDecl
-def binder := bracketedBinder (requireType := true)
+public meta def binder := bracketedBinder (requireType := true)
 
 syntax (name := joint)
   "joint" (".{" ident,+ "}")? binder*
@@ -37,7 +35,7 @@ structure TheoremDecl where
 
 /-- Join a sequence of names by underscores,
 preceded and postceded by underscores. -/
-def mkJointName (names : Array Name) : Name :=
+meta def mkJointName (names : Array Name) : Name :=
   match names.foldl append (Name.mkStr1 "") with
   | .str n s | .num n s => .str n s!"{s}_"
   | n => n
@@ -49,7 +47,7 @@ def mkJointName (names : Array Name) : Name :=
 
 /-- Get the bound variable `x` in a typed bracketed binder
 `(x : A)`, `{x : A}`, `⦃x : A⦄`, or `{{x : A}}`. -/
-def getBoundVars (binder : TSyntax `Lean.Parser.Term.bracketedBinder) : TSyntaxArray `ident :=
+meta def getBoundVars (binder : TSyntax `Lean.Parser.Term.bracketedBinder) : TSyntaxArray `ident :=
   match binder with
   | `(binder|  ($xs:ident* : $_:term))
   | `(binder|  {$xs:ident* : $_:term})
@@ -64,7 +62,7 @@ create the pair
   `⟨(∀ (x : A)..., B), (λ (x : A)... ↦ ?thm)⟩`
 of type `(Σ' A : Sort _, A)`.
 -/
-def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
+meta def mkThmPair (thm : TheoremDecl) : MacroM (TSyntax `term) := do
   `(PSigma.mk (∀ $thm.binders*, $thm.sig) (λ $thm.binders* ↦ ?$thm.name))
 
 /--
@@ -73,7 +71,7 @@ with a heterogeneous array of proofs of `Aᵢ`.
 The body of the definition is a refined array of holes `?thmᵢ : A_i`
 that should then be solved by the given `tactics`.
 -/
-def mkJointDef (jnt : JointVars) (thms : Array TheoremDecl) (byTk : Syntax) (tactics : Syntax.TSepArray `tactic "") :
+meta def mkJointDef (jnt : JointVars) (thms : Array TheoremDecl) (byTk : Syntax) (tactics : Syntax.TSepArray `tactic "") :
     MacroM (Command × TSyntax `ident) := do
   let id := mkIdent <| mkJointName (thms.map (·.name.getId))
   let pairs ← thms.mapM mkThmPair
@@ -90,7 +88,7 @@ The `i`th theorem is proven by the `i`th element of the jointly defined array:
   `theorem thmₙ : Aₙ := _thm₁_..._thmₙ_[i].snd`.
 Note it must be that `_thm₁_..._thmₙ_[i].fst = Aₙ`.
 -/
-def mkNthThm (id : TSyntax `ident) (jnt : JointVars) (i : Nat) (thm : TheoremDecl) : MacroM Command := do
+meta def mkNthThm (id : TSyntax `ident) (jnt : JointVars) (i : Nat) (thm : TheoremDecl) : MacroM Command := do
   let istx := Syntax.mkNatLit i
   let args := Array.flatten <| jnt.binders.map getBoundVars
   let nthThm ← withRef thm.stx <|
@@ -125,7 +123,7 @@ the proof environment contains two goals:
 * `case oddInv`  with state `n : Nat, h : isOdd  (n + 1) ⊢ isEven n`.
 -/
 @[macro «joint»]
-def expandJoint : Macro := λ stx ↦ do
+public meta def expandJoint : Macro := λ stx ↦ do
   match stx with
   | `(command| joint$[.{$univs,*}]? $vars* $thms:theoremDecl* by%$byTk $tactics:tactic*) =>
     let jointVars : JointVars := {univs := univs.getD {}, binders := vars}

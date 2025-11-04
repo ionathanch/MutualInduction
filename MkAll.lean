@@ -1,3 +1,5 @@
+module
+
 import Lean
 
 namespace Lean.Meta.MkAll
@@ -259,9 +261,10 @@ initialize Lean.registerBuiltinAttribute {
   name := `mkAll
   descr := "Generate an `all` predicate for an inductive with a strictly positive parameter."
   add := fun decl stx _ => MetaM.run' do
-    let ⟨decl, params, stx⟩ ← match stx with
-      | `(attr| mk_all $[$params:ident]*) => pure (decl, params, stx)
+    let ⟨decl, params⟩ ← match stx with
+      | `(attr| mk_all $[$params:ident]*) => pure (decl, params)
       | _ => throwError "unrecognized syntax"
     mkAllInductive decl (params.map (·.getId))
 }
+
 end MkAll

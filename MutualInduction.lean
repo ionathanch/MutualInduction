@@ -1,9 +1,32 @@
-import Lean.Elab.Tactic.Induction
+module
+
+import all Init.Data.Array.QSort.Basic
+public meta import Lean.Meta.GeneralizeVars
+public meta import Lean.Meta.Tactic.Generalize
+public meta import Lean.Elab.Tactic.Induction
 
 -- Why is this not in Lean.Expr?
-def Lean.Expr.mvarId? : Expr → Option MVarId
+meta def Lean.Expr.mvarId? : Expr → Option MVarId
   | .mvar n => some n
   | _      => none
+
+-- And why is this not in Init.Data.Vector.Basic?
+@[inline] meta def Vector.zip3 {α β γ n} (as : Vector α n) (bs : Vector β n) (cs : Vector γ n): Vector (α × β × γ) n :=
+  ⟨as.toArray.zip (bs.toArray.zip cs.toArray), by simp⟩
+
+-- And why is this not top-level in Init.Data.Array.QSort.Basic?
+meta def Vector.qsort {α n} (as : Vector α n) (lt : α → α → Bool) : Vector α n :=
+  match n with
+  | 0 => as
+  | n + 1 => Array.qsort.sort lt as 0 n
+
+/--
+Take the first `n` elements of a list,
+returning a vector of length `n`
+only if there were `n` elements to take. -/
+meta def List.takeToVector? {α} (as : List α) (n : Nat) : Option (Vector α n) :=
+  let as := (as.take n).toArray
+  if e : as.size = n then some ⟨as, e⟩ else none
 
 namespace Lean.Elab.Tactic
 open Meta
@@ -20,13 +43,13 @@ structure Goal where
   genFVars   : Array FVarId
   indVal     : InductiveVal
   elimInfo   : ElimInfo
-deriving Inhabited
+-- deriving Inhabited
 
 structure GoalWithMotives extends Goal where
   motive  : Expr
   motives : Array Expr := #[]
 
-structure Alt extends ElimApp.Alt where
+meta structure Alt extends ElimApp.Alt where
   numGenFVars : Nat := 0
   trivial : Bool := false
 deriving Inhabited
@@ -79,7 +102,7 @@ Find a metavariable whose name is (a suffix or prefix of) `tag`,
 and throw an error if none exists.
 This is adapted from `Lean.Elab.Tactic.findTag?`.
 -/
-def findTag (mvarIds : List MVarId) (tag : Name) : MetaM MVarId := do
+meta def findTag (mvarIds : List MVarId) (tag : Name) : MetaM MVarId := do
   match (← mvarIds.findM? fun mvarId => return tag == (← mvarId.getDecl).userName) with
   | some mvarId => return mvarId
   | none =>
@@ -95,14 +118,15 @@ If custom arguments are provided,
 ensure there are exactly as many as there are targets,
 returning a list of optional arguments the length of the number of targets.
 -/
-def countArgs {α} (mvarId : MVarId) (argName : Name) (numTargets : Nat) (args? : Option (Array α)) : MetaM (Array (Option α)) := do
+meta def countArgs {α} (mvarId : MVarId) (argName : Name) (numTargets : Nat) (args? : Option (Array α)) : MetaM (Vector (Option α) numTargets) := do
   let some args := args?
-    | return Array.replicate numTargets none
-  unless args.isEmpty || args.size == numTargets do
+    | return Vector.replicate numTargets none
+  if e : args.size = numTargets then
+    return by rw [← e]; exact args.toVector.map some
+  else
     throwTacticEx `mutual_induction mvarId
       m!"incorrect number of {argName} provided: \
          expected {numTargets}, but got {args.size}"
-  return args.map some
 
 /--
 Given a list of `targets`, find their transitive dependencies in the local context,
@@ -131,7 +155,7 @@ then `fvarIdDeps` would also contain `P`.
 Precondition: `targets` must be free variables.
 Postcondition: The resulting array is sorted in order of declaration.
 -/
-def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId) := do
+meta def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId) := do
   let targetFVars := targets.map (·.fvarId!)
   let fvarIds ← Meta.getFVarsToGeneralize targets
   let mut s := collectFVars {} (← instantiateMVars e)
@@ -151,11 +175,12 @@ Given all goals of the mutual induction, check that they exactly cover the induc
 
 Precondition: There must exist at least one goal.
 -/
-def checkTargets (goals : Array Goal) : MetaM Unit := do
-  for i in [0:goals.size] do
-    for j in [0:i] do
-      let goal1 := goals[j]!
-      let goal2 := goals[i]!
+meta def checkTargets {n} (goals : Vector Goal n) : MetaM Unit := do
+  for hi : i in [0:n] do
+    for hj : j in [0:i] do
+      let lt : j < n := Nat.lt_trans hj.right.left hi.right.left
+      let goal1 := goals[j]'lt
+      let goal2 := goals[i]
       unless goal1.indVal.all.contains goal2.indVal.name do
         throwTacticEx `mutual_induction goal1.mvarId
           m!"targets do not belong to mutual inductive types: \
@@ -180,7 +205,7 @@ def checkTargets (goals : Array Goal) : MetaM Unit := do
 Ensure that all given "free" variables are declared in the contexts of each goal.
 (They're not really "free" if they're bound in the context, are they?)
 -/
-def checkFVars (goals : Array Goal) (idents : Array Syntax) : TermElabM Unit := do
+meta def checkFVars {n} (goals : Vector Goal n) (idents : Array Syntax) : TermElabM Unit := do
   for goal in goals do
     for ident in idents do
       goal.mvarId.withContext do
@@ -231,15 +256,15 @@ Postconditions:
 * The motives in each goal are sorted by the order its eliminator quantifies over them; and
 * The goals themselves are sorted by their motives in the same order.
 -/
-def addMotives (gs : Array Goal) (userFVars : Array FVarId): MetaM (Array GoalWithMotives) := do
+meta def addMotives {n} (gs : Vector Goal n) (userFVars : Array FVarId): MetaM (Vector GoalWithMotives n) := do
   let gs ← gs.mapM filterGenFVars
   let gs ← gs.mapM genUserFVars
   let gs ← gs.mapM addMotive
   let gs := gs.qsort (·.elimInfo.motivePos < ·.elimInfo.motivePos)
   return gs.map (addMotives gs)
 where
-  addMotives (goals : Array GoalWithMotives) (goal : GoalWithMotives) : GoalWithMotives :=
-    let goals := goals.filter (·.elimInfo.motivePos != goal.elimInfo.motivePos)
+  addMotives (goals : Vector GoalWithMotives n) (goal : GoalWithMotives) : GoalWithMotives :=
+    let goals := goals.toArray.filter (·.elimInfo.motivePos != goal.elimInfo.motivePos)
     {goal with
       motives := goals.map (·.motive)
       elimInfo := {goal.elimInfo with
@@ -286,18 +311,19 @@ Preconditions:
 * There must exist at least one sequence of subgoals; and
 * All sequences of subgoals must have the same length and pointwise have the same type.
 -/
-def deduplicate (tag : Name) (tags : Array (Name × Name)) (alts : Array (Array Alt)) : MetaM (Array Alt) := do
+meta def deduplicate {n} (tag : Name) (tags : Vector (Name × Name) n) (alts : Vector (Array Alt) n) : MetaM (Array Alt) := do
   let mut deduped := alts[0]!
   -- find the canonical alternatives that prove the motive
   for alt in alts do
-    for i in [0:alt.size] do
-      if alt[i]!.info.provesMotive then
-        deduped := deduped.set! i alt[i]!
+    for h : i in [0:alt.size] do
+      let alti := alt[i]'h.right.left
+      if alti.info.provesMotive then
+        deduped := deduped.set! i alti
   -- assign identical alternatives to canonical alternative
   for alt in alts do
-    for i in [0:alt.size] do
+    for h : i in [0:alt.size] do
       let deAlt := deduped[i]!.mvarId
-      let otherAlt := alt[i]!.mvarId
+      let otherAlt := (alt[i]'h.right.left).mvarId
       unless deAlt == otherAlt do
       let altExpectedType ← inferType (.mvar deAlt)
       let altType ← inferType (.mvar otherAlt)
@@ -317,7 +343,7 @@ the target and its indices, its inductive type,
 the goal and its the free variables to generalize,
 and information about the eliminator to be applied.
 -/
-def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × MVarId) : TacticM Goal :=
+meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × MVarId) : TacticM Goal :=
   let ⟨targetName, elim?, goal⟩ := stxgoal
   goal.withContext do
   let target ← elabTerm targetName none
@@ -393,7 +419,7 @@ Preconditions:
 * `g.elimInfo.elimExpr` is an eliminator that proves the motive `g.motive`; and
 * `g.elimInfo.targetsPos` also contains the positions of the other motives in the eliminator.
 -/
-def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
+meta def evalSubgoal (g : GoalWithMotives) : TacticM (Array Alt) :=
   g.mvarId.withContext do
     -- instantiate eliminator
     let result ← withRef g.stx do
@@ -456,7 +482,7 @@ If the goal itself is trivial because its motive was instantiated as `PUnit`,
 solve the goal by `constructor`.
 Otherwise, add the goal to the current list of goals.
 -/
-def addSubgoal (subgoal : Alt) : TacticM Unit := do
+meta def addSubgoal (subgoal : Alt) : TacticM Unit := do
   let ⟨ihs, mvarId⟩ ← subgoal.mvarId.introN subgoal.info.numFields
   let ⟨_, mvarId⟩ ← mvarId.introNP subgoal.numGenFVars
   let punits ← mvarId.withContext <| ihs.filterM isPUnit
@@ -484,11 +510,12 @@ The mutual eliminators produce identical subgoals,
 which we deduplicate so that the user ony needs to solve one set of them.
 -/
 @[tactic mutual_induction]
-def evalMutualInduction : Tactic := λ stx ↦ do
+public meta def evalMutualInduction : Tactic := λ stx ↦ do
   let tag ← getMainGoal >>= (·.getTag)
   let ⟨targetNames, elims, genFVarNames⟩ ← parse stx
   let elims ← countArgs (← getMainGoal) `eliminators targetNames.size elims
-  let stxgoals := Array.zip targetNames (Array.zip elims (← getUnsolvedGoals).toArray)
+  let goals ← takeGoals targetNames.size
+  let stxgoals := Vector.zip3 targetNames.toVector elims goals
   let subgoals ← stxgoals.mapM getSubgoal
   checkTargets subgoals
   checkFVars subgoals genFVarNames
@@ -504,5 +531,11 @@ def evalMutualInduction : Tactic := λ stx ↦ do
       | `(tactic| mutual_induction $targets,* $[using $elims,*]? $[generalizing $genVars*]?) =>
         return (targets.getElems, elims.map Syntax.TSepArray.getElems, genVars.getD #[])
       | _ => throwErrorAt stx "could not parse mutual_induction tactic"
+    takeGoals (n : Nat) : TacticM (Vector MVarId n) := do
+      let goals : List MVarId ← getUnsolvedGoals
+      let some goals := goals.takeToVector? n
+        | throwError m!"insufficient number of goals available: \
+            expected {n}, but found {goals.length}"
+      return goals
 
 end Tactic

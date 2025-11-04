@@ -12,11 +12,17 @@ reservoir := true
 @[default_target]
 lean_lib «MutualInduction» where
   roots := #[`MutualInduction, `Joint]
-  leanOptions := #[⟨`autoImplicit, false⟩]
+  leanOptions := #[
+    ⟨`autoImplicit, false⟩,
+    ⟨`experimental.module, true⟩
+  ]
 
 @[default_target]
 lean_lib «MkAll» where
-  leanOptions := #[⟨`autoImplicit, false⟩]
+  leanOptions := #[
+    ⟨`autoImplicit, false⟩,
+    ⟨`experimental.module, true⟩
+  ]
 
 @[test_driver]
 lean_lib «Test» where
@@ -24,5 +30,6 @@ lean_lib «Test» where
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`pp.fieldNotation, false⟩,
-    ⟨`pp.proofs, true⟩
+    ⟨`pp.proofs, true⟩,
+    ⟨`experimental.module, true⟩
   ]
