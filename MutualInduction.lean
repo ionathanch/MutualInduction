@@ -10,15 +10,20 @@ meta def Lean.Expr.mvarId? : Expr → Option MVarId
   | .mvar n => some n
   | _      => none
 
--- And why is this not in Init.Data.Vector.Basic?
-@[inline] meta def Vector.zip3 {α β γ n} (as : Vector α n) (bs : Vector β n) (cs : Vector γ n): Vector (α × β × γ) n :=
+namespace Vector
+
+@[inline] meta def zip3 {α β γ n} (as : Vector α n) (bs : Vector β n) (cs : Vector γ n) : Vector (α × β × γ) n :=
   ⟨as.toArray.zip (bs.toArray.zip cs.toArray), by simp⟩
 
--- And why is this not top-level in Init.Data.Array.QSort.Basic?
-meta def Vector.qsort {α n} (as : Vector α n) (lt : α → α → Bool) : Vector α n :=
+@[inline] meta def zip4 {α β γ δ n} (as : Vector α n) (bs : Vector β n) (cs : Vector γ n) (ds : Vector δ n) : Vector (α × β × γ × δ) n :=
+  ⟨as.toArray.zip (bs.toArray.zip (cs.toArray.zip ds.toArray)), by simp⟩
+
+meta def qsort {α n} (as : Vector α n) (lt : α → α → Bool) : Vector α n :=
   match n with
   | 0 => as
   | n + 1 => Array.qsort.sort lt as 0 n
+
+end Vector
 
 /--
 Take the first `n` elements of a list,
@@ -41,6 +46,7 @@ structure Goal where
   /-- Target and its indices -/
   targets    : Array Expr
   genFVars   : Array FVarId
+  userFVars  : Array FVarId
   indVal     : InductiveVal
   elimInfo   : ElimInfo
 -- deriving Inhabited
@@ -96,6 +102,38 @@ syntax (name := mutual_induction)
     (" using" term,+)?
     (" generalizing" (ppSpace colGt term:max)+)?
   : tactic
+
+declare_syntax_cat goal
+syntax " | " ident " => " term
+  (" using" term)?
+  (" generalizing" (ppSpace colGt term:max)+)? : goal
+
+/--
+Given goals `tag₁`, ..., `tagₙ`, each with a variable `x₁`, ..., `xₙ` respectively,
+where each variable belongs to a different mutual inductive type,
+`mutual_induction | tag₁ => x₁ | ... | tagₙ => xₙ`
+applies mutual induction on each `x` to each goal `tag`.
+It produces one goal for each constructor of the mutual inductive types,
+in which the target is replaced by a general instance of that constructor
+and an inductive hypothesis is added for each mutually recursive argument to the constructor.
+Note that exactly one goal and target must be provided for each mutual inductive type.
+
+* `mutual_induction | tag => x using r`
+  allows specifying the principle of induction used for goal `tag`.
+  Here, `r` must be a term whose result type has the form `C t...`,
+  where `C` is a bound variable representing the goal's motive,
+  and `t...` is a (possibly empty) sequence of bound variables.
+* `mutual_induction | tag => x generalizing z₁ ... zₘ`,
+  where `z₁ ... zₘ` are variables in the context of goal `tag`,
+  generalizes over `z₁ ... zₘ` before applying the induction,
+  but then reintroduces them in each new goal produced.
+  The net effect is that each inductive hypothesis is generalized.
+  Each goal may generalize over a different set of variables.
+
+`mutual_induction'` is a variant form of `mutual_induction`.
+See the doc comment of `mutual_induction` for a usage example.
+-/
+syntax (name := mutual_induction') "mutual_induction'" goal+ : tactic
 
 /--
 Find a metavariable whose name is (a suffix or prefix of) `tag`,
@@ -202,18 +240,6 @@ meta def checkTargets {n} (goals : Vector Goal n) : MetaM Unit := do
   --     m!"missing targets for mutual inductive types: {missingIndNames}"
 
 /--
-Ensure that all given "free" variables are declared in the contexts of each goal.
-(They're not really "free" if they're bound in the context, are they?)
--/
-meta def checkFVars {n} (goals : Vector Goal n) (idents : Array Syntax) : TermElabM Unit := do
-  for goal in goals do
-    for ident in idents do
-      goal.mvarId.withContext do
-      if let none ← Term.resolveId? ident then
-        throwTacticEx `mutual_induction goal.mvarId
-          m!"unknown identifier '{ident}' in goal '{goal.name}'"
-
-/--
 Compute all motives for all goals,
 in each goal abstracting over the goal's targets
 and generalizing over the goal's free variables,
@@ -256,9 +282,9 @@ Postconditions:
 * The motives in each goal are sorted by the order its eliminator quantifies over them; and
 * The goals themselves are sorted by their motives in the same order.
 -/
-meta def addMotives {n} (gs : Vector Goal n) (userFVars : Array FVarId): MetaM (Vector GoalWithMotives n) := do
+meta def addMotives {n} (gs : Vector Goal n) : MetaM (Vector GoalWithMotives n) := do
   let gs ← gs.mapM filterGenFVars
-  let gs ← gs.mapM genUserFVars
+  gs.forM checkUserFVars
   let gs ← gs.mapM addMotive
   let gs := gs.qsort (·.elimInfo.motivePos < ·.elimInfo.motivePos)
   return gs.map (addMotives gs)
@@ -272,20 +298,19 @@ where
                    ++ goal.elimInfo.targetsPos}}
   addMotive (g : Goal) : MetaM GoalWithMotives :=
     g.mvarId.withContext do
-    let ⟨genFVars, goal⟩ ← sortFVarIds g.genFVars >>= g.mvarId.revert
+    let ⟨genFVars, goal⟩ ← sortFVarIds (g.userFVars ++ g.genFVars) >>= g.mvarId.revert
     goal.withContext do
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let motive ← mkLambdaFVars g.targets goalType
     return {g with mvarId := goal, genFVars, motive}
-  genUserFVars (g : Goal) : MetaM Goal :=
+  checkUserFVars (g : Goal) : MetaM Unit :=
     g.mvarId.withContext do
     let forbidden ← mkGeneralizationForbiddenSet g.targets
-    for userFVarId in userFVars do
+    for userFVarId in g.userFVars do
       if forbidden.contains userFVarId then
         throwError "variable cannot be generalized because target depends on it{indentExpr (mkFVar userFVarId)}"
       if g.genFVars.contains userFVarId then
         throwError "unnecessary 'generalizing' argument, variable '{mkFVar userFVarId}' is generalized automatically"
-    pure {g with genFVars := userFVars ++ g.genFVars}
   filterGenFVars (g : Goal) : MetaM Goal := do
     let genFVars ← g.genFVars.filterM notFreeInAnyGoal
     return {g with genFVars}
@@ -337,14 +362,16 @@ meta def deduplicate {n} (tag : Name) (tags : Vector (Name × Name) n) (alts : V
   return deduped
 
 /--
-Given a goal and a target in that goal,
+Given a goal, a target and a set of free variables in that goal,
+and optionally an eliminator to be applied,
 produce all the information we can glean without considering the other mutual goals:
 the target and its indices, its inductive type,
 the goal and its the free variables to generalize,
-and information about the eliminator to be applied.
+the user-provided free variables to generalize,
+and information about the eliminator.
 -/
-meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × MVarId) : TacticM Goal :=
-  let ⟨targetName, elim?, goal⟩ := stxgoal
+meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × TSyntaxArray `term × MVarId) : TacticM Goal :=
+  let ⟨targetName, elim?, userFVars, goal⟩ := stxgoal
   goal.withContext do
   let target ← elabTerm targetName none
   let indVal ← getInductiveVal goal target
@@ -359,7 +386,8 @@ meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × MVarId
   checkInductionTargets targets
   let goalType ← MetavarDecl.type <$> goal.getDecl
   let genFVars ← getFVarsToGeneralize targets goalType
-  return ⟨targetName, (← goal.getDecl).userName, goal, targetUserName, targets, genFVars, indVal, elimInfo⟩
+  let userFVars ← getFVarIds userFVars
+  return ⟨targetName, (← goal.getDecl).userName, goal, targetUserName, targets, genFVars, userFVars, indVal, elimInfo⟩
 where
   /--
   Adapted from `Lean.Elab.Tactic.getInductiveValFromMajor`,
@@ -509,33 +537,43 @@ each eliminator with all motives and apply it to their goals.
 The mutual eliminators produce identical subgoals,
 which we deduplicate so that the user ony needs to solve one set of them.
 -/
-@[tactic mutual_induction]
+@[tactic mutual_induction, tactic mutual_induction']
 public meta def evalMutualInduction : Tactic := λ stx ↦ do
   let tag ← getMainGoal >>= (·.getTag)
-  let ⟨targetNames, elims, genFVarNames⟩ ← parse stx
-  let elims ← countArgs (← getMainGoal) `eliminators targetNames.size elims
-  let goals ← takeGoals targetNames.size
-  let stxgoals := Vector.zip3 targetNames.toVector elims goals
+  let ⟨_, stxgoals⟩ ← parse stx
   let subgoals ← stxgoals.mapM getSubgoal
   checkTargets subgoals
-  checkFVars subgoals genFVarNames
-  let genFVars ← getFVarIds genFVarNames
   let tags := subgoals.map (λ goal ↦ ⟨goal.indVal.name, goal.name⟩)
-  let subgoals ← addMotives subgoals genFVars
+  let subgoals ← addMotives subgoals
   let subgoals ← subgoals.mapM evalSubgoal
   let subgoals ← deduplicate tag tags subgoals
   for subgoal in subgoals.reverse do addSubgoal subgoal
   where
-    parse (stx : Syntax) := do
-      match stx with
-      | `(tactic| mutual_induction $targets,* $[using $elims,*]? $[generalizing $genVars*]?) =>
-        return (targets.getElems, elims.map Syntax.TSepArray.getElems, genVars.getD #[])
-      | _ => throwErrorAt stx "could not parse mutual_induction tactic"
-    takeGoals (n : Nat) : TacticM (Vector MVarId n) := do
-      let goals : List MVarId ← getUnsolvedGoals
-      let some goals := goals.takeToVector? n
-        | throwError m!"insufficient number of goals available: \
-            expected {n}, but found {goals.length}"
-      return goals
+  parse (stx : Syntax) : TacticM (Σ n, Vector _ n) := do
+    match stx with
+    | `(tactic| mutual_induction $targets,* $[using $elims,*]? $[generalizing $genVars*]?) =>
+      let targetNames := targets.getElems.toVector
+      let elims := elims.map Syntax.TSepArray.getElems
+      let elims ← countArgs (← getMainGoal) `eliminators targetNames.size elims
+      let goals ← takeGoals targetNames.size
+      let genVars := .replicate _ (genVars.getD #[])
+      return ⟨targetNames.size, Vector.zip4 targetNames elims genVars goals⟩
+    | `(tactic| mutual_induction' $goals*) => do
+      let unsolvedGoals ← getUnsolvedGoals
+      let stxgoals ← goals.mapM λ stxgoal ↦
+        match stxgoal with
+        | `(goal| | $tag => $target $[using $elim]? $[generalizing $genVars*]?) => do
+          let genVars := genVars.getD #[]
+          let tag ← findTag unsolvedGoals tag.getId
+          return (target, elim, genVars, tag)
+        | _ => throwErrorAt stxgoal "could not parse mutual_induction' tactic"
+      return ⟨stxgoals.size, stxgoals.toVector⟩
+    | _ => throwErrorAt stx "could not parse mutual_induction tactic"
+  takeGoals (n : Nat) : TacticM (Vector MVarId n) := do
+    let goals : List MVarId ← getUnsolvedGoals
+    let some goals := goals.takeToVector? n
+      | throwError m!"insufficient number of goals available: \
+          expected {n}, but found {goals.length}"
+    return goals
 
 end Tactic

@@ -438,11 +438,11 @@ def thmₙ.{u,...} (y : A)... : ∀ (xₙ : Bₙ)..., Cₙ := (@_thms_.{u,...} y
 There are many possible usability improvements for this tactic.
 A simple one is adding an option to keep missing motives as additional goals
 instead of filling them with `PUnit`, but this use case seems rare.
-Below are other more elaborate potential extensions.
+Below are other more elaborate (potential) extensions.
 
-### Transposed clauses
+### Transposed clauses (now implemented!)
 
-The tactic's current syntax doesn't allow for
+The syntax of `mutual_induction` doesn't allow for
 generalizing different sets of variables in each goal,
 only generalizing the same set in all goals.
 We can imagine using comma-separated sets of generalized variables,
@@ -465,23 +465,19 @@ mutual_induction x₁, x₂, x₃, x₄, x₅ generalizing ,,,,z
 mutual_induction x₁, x₂, x₃, x₄, x₅ generalizing z, z, z, z, z
 ```
 
-An alternate syntax would be to transpose the goals,
+The alternate syntax `mutual_induction'` transposes the goals,
 specifying the clauses for each one separately.
 We can refer to the goals by name this way,
 which frees us from specifying the targets in the fixed given order.
 
 ```lean
-mutual_induction
+mutual_induction'
 | goal₁ => x₁ (using r₁)? (generalizing z₁...)?
 ...
 | goalₙ => xₙ (using rₙ)? (generalizing zₙ...)?
 ```
 
-This is quite a bit wordier,
-but this could be added as an alternate expanded syntax
-alongside the current terser one.
-
-### `with` clauses
+### `with` clauses (not yet implemented)
 
 At the moment, the tactic is missing support for `with` clauses.
 The `with` clause applies tactics to the specified subgoals generated,
