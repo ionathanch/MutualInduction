@@ -14,14 +14,12 @@ lean_lib «MutualInduction» where
   roots := #[`MutualInduction, `Joint]
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
-    ⟨`experimental.module, true⟩
   ]
 
 @[default_target]
 lean_lib «MkAll» where
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
-    ⟨`experimental.module, true⟩
   ]
 
 @[test_driver]
@@ -31,5 +29,4 @@ lean_lib «Test» where
     ⟨`autoImplicit, false⟩,
     ⟨`pp.fieldNotation, false⟩,
     ⟨`pp.proofs, true⟩,
-    ⟨`experimental.module, true⟩
   ]
