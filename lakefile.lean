@@ -26,7 +26,7 @@ lean_lib «MkAll» where
 
 @[test_driver]
 lean_lib «Test» where
-  globs := #[`MutualInductionTest.+, `JointTest.+, `AllTest.+]
+  globs := #[`MutualInductionTest.+, `MutualInductionAltTest.+, `JointTest.+, `AllTest.+]
   leanOptions := #[
     ⟨`autoImplicit, false⟩,
     ⟨`pp.fieldNotation, false⟩,
