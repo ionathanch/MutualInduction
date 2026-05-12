@@ -45,13 +45,19 @@ structure Goal where
   target     : Name
   /-- Target and its indices -/
   targets    : Array Expr
+  /-- Variables which _must_ be generalized -/
   genFVars   : Array FVarId
+  /-- Variables which _may_ be generalized -/
+  closFVars  : Array FVarId
+  /-- Variables which the user generalizes -/
   userFVars  : Array FVarId
   indVal     : InductiveVal
   elimInfo   : ElimInfo
 -- deriving Inhabited
 
 structure GoalWithMotives extends Goal where
+  /-- Number of variables the motive is generalized over -/
+  numGenFVars : Nat
   motive  : Expr
   motives : Array Expr := #[]
 
@@ -189,11 +195,13 @@ If `f` and `n` are the targets, then `fvarIds` contains `p` and `q`,
 and `fvarIdDeps` contains `m`, since `q` depends on it.
 If `P m (q ▸ f)` is the additional expression,
 then `fvarIdDeps` would also contain `P`.
+The variables that _must_ be generalized are `fvarIds`,
+since induction on `f` will alter the types of `p` and `q`.
 
 Precondition: `targets` must be free variables.
 Postcondition: The resulting array is sorted in order of declaration.
 -/
-meta def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId) := do
+meta def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array FVarId × Array FVarId) := do
   let targetFVars := targets.map (·.fvarId!)
   let fvarIds ← Meta.getFVarsToGeneralize targets
   let mut s := collectFVars {} (← instantiateMVars e)
@@ -203,7 +211,7 @@ meta def getFVarsToGeneralize (targets : Array Expr) (e : Expr) : MetaM (Array F
     if let some val := decl.value? then
       s := collectFVars s (← instantiateMVars val)
   let fvarIdDeps := s.fvarIds.filter (not ∘ targetFVars.contains)
-  return fvarIds ++ fvarIdDeps
+  return (fvarIds, fvarIdDeps)
 
 /--
 Given all goals of the mutual induction, check that they exactly cover the inductive types:
@@ -283,7 +291,7 @@ Postconditions:
 * The goals themselves are sorted by their motives in the same order.
 -/
 meta def addMotives {n} (gs : Vector Goal n) : MetaM (Vector GoalWithMotives n) := do
-  let gs ← gs.mapM filterGenFVars
+  let gs ← gs.mapM filterClosFVars
   gs.forM checkUserFVars
   let gs ← gs.mapM addMotive
   let gs := gs.qsort (·.elimInfo.motivePos < ·.elimInfo.motivePos)
@@ -298,11 +306,11 @@ where
                    ++ goal.elimInfo.targetsPos}}
   addMotive (g : Goal) : MetaM GoalWithMotives :=
     g.mvarId.withContext do
-    let ⟨genFVars, goal⟩ ← sortFVarIds (g.userFVars ++ g.genFVars) >>= g.mvarId.revert
+    let ⟨genFVars, goal⟩ ← sortFVarIds (g.userFVars ++ g.genFVars ++ g.closFVars) >>= g.mvarId.revert
     goal.withContext do
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let motive ← mkLambdaFVars g.targets goalType
-    return {g with mvarId := goal, genFVars, motive}
+    return {g with mvarId := goal, numGenFVars := genFVars.size, motive}
   checkUserFVars (g : Goal) : MetaM Unit :=
     g.mvarId.withContext do
     let forbidden ← mkGeneralizationForbiddenSet g.targets
@@ -311,9 +319,9 @@ where
         throwError "variable cannot be generalized because target depends on it{indentExpr (mkFVar userFVarId)}"
       if g.genFVars.contains userFVarId then
         throwError "unnecessary 'generalizing' argument, variable '{mkFVar userFVarId}' is generalized automatically"
-  filterGenFVars (g : Goal) : MetaM Goal := do
-    let genFVars ← g.genFVars.filterM notFreeInAnyGoal
-    return {g with genFVars}
+  filterClosFVars (g : Goal) : MetaM Goal := do
+    let closFVars ← g.closFVars.filterM notFreeInAnyGoal
+    return {g with closFVars}
   notFreeInAnyGoal (fvarId : FVarId) : MetaM Bool :=
     gs.anyM (notFreeInGoal fvarId)
   notFreeInGoal (fvarId : FVarId) (g : Goal) : MetaM Bool :=
@@ -385,9 +393,15 @@ meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × TSynta
   let targets ← addImplicitTargets elimInfo #[target]
   checkInductionTargets targets
   let goalType ← MetavarDecl.type <$> goal.getDecl
-  let genFVars ← getFVarsToGeneralize targets goalType
+  let (genFVars, closFVars) ← getFVarsToGeneralize targets goalType
   let userFVars ← getFVarIds userFVars
-  return ⟨targetName, (← goal.getDecl).userName, goal, targetUserName, targets, genFVars, userFVars, indVal, elimInfo⟩
+  return {
+    stx := targetName,
+    name := (← goal.getDecl).userName,
+    mvarId := goal,
+    target := targetUserName,
+    targets, genFVars, closFVars, userFVars, indVal, elimInfo
+  }
 where
   /--
   Adapted from `Lean.Elab.Tactic.getInductiveValFromMajor`,
@@ -479,7 +493,7 @@ where
         unsolvedMotives.contains altHeadMVar
       else false
     if alt.info.provesMotive
-    then return {alt with trivial, numGenFVars := g.genFVars.size}
+    then return {alt with trivial, numGenFVars := g.numGenFVars}
     else return {alt with trivial}
   appendMotives (es : Array Expr) (altMVarIds : Array MVarId) : TacticM (Array MVarId) := do
     let mut unsolvedMotives : Array MVarId := #[]

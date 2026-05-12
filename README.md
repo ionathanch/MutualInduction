@@ -4,7 +4,7 @@
 * [Mutual induction with the tactic](#mutual-induction-with-the-tactic)
 * [How does the tactic work?](#how-does-the-tactic-work)
   1. [Compute targets and generalized variables](#1-compute-targets-and-generalized-variables)
-  2. [Check coverage and variable scoping](#2-check-coverage-and-variable-scoping)
+  2. [Check coverage over mutual indutives](#2-check-coverage-over-mutual-inductives)
   3. [Generalize variables and compute motives](#3-generalize-variables-and-compute-motives)
   4. [Apply recursors](#4-apply-recursors)
   5. [Deduplicate subgoals](#5-deduplicate-subgoals)
@@ -200,11 +200,12 @@ and `Odd`, `[1, 5, 6]` for the second.
 
 Now, we need to find the variables to generalize the goals over, which are
 
+0. The variables the user specifies as generalized; and
 1. The variables whose types depend on the targets; but also
 2. In the types of *those* variables, the other variables they depend on; and
 3. The other variables that the goal depends on.
 
-The variables in bucket (1) are what get generalized in the usual `induction` tactic.
+The variables in buckets (0) and (1) are what get generalized in the usual `induction` tactic.
 However, because we are dealing with multiple goals in different contexts,
 we need to ensure when we turn the goals into motives that they are closed,
 which means possibly generalizing over all variables in buckets (2) and (3).
@@ -214,8 +215,11 @@ In our example, this corresponds to
 * (2, 3) `n` and `m` depended upon by `e₁`, `e₂`, and the goals.
 
 This work is done by `Lean.Elab.Tactic.getSubgoal`.
+Bucket (0) corresponds to `Goal.userFVars`,
+bucket (1) corresponds to `Goal.genFVars`,
+and buckets (2) and (3) are combined in `Goal.closFVars`.
 
-### 2. Check coverage and variable scoping
+### 2. Check coverage over mutual inductives
 
 Although the previous step ensures that the targets are inductive,
 we also need to ensure that
@@ -230,39 +234,35 @@ If a motive is missing due to a missing target for one of the inductive types,
 then ~~we add that motive as an additional goal~~
 it gets set to the trivial constant type `PUnit`.
 
-We then check that the provided generalized variables
-are indeed shared across goals, i.e. declared in each of the goals' contexts.
-Variables depended upon that aren't shared across goals must always be generalized
-to produce closed motives, as described in the previous step.
-
-This work is done by `Lean.Elab.Tactic.checkTargets`
-and by `Lean.Elab.Tactic.checkFVars`.
+This work is done by `Lean.Elab.Tactic.checkTargets`.
 
 ### 3. Generalize variables and compute motives
 
 Although we compute the variables that may be generalized independently for each goal,
 we don't yet actually generalize them,
-because there may variables that happen to be common to all goals
+because there may variables in buckets (2) or (3) that happen to be common to all goals
 that don't need to be generalized over because they'll always be in scope.
-In this case, because `n` is explicitly generalized, `m` is the only such variable,
-which makes sense because it was introduced outside of the conjunction.
+In this case, because `n` is explicitly generalized, `m` is the only such variable.
 Only now do we finally generalize the variables
 and compute the motives by abstracting the goals over the targets.
+Note that variables in bucket (1) are _always_ generalized,
+since their types depend on the targets and are different for each inductive case;
+here, these variables are `e₁` and `e₂`, which depend on `k₁` and `k₂`, respectively.
 
 ```lean
 ▼ case evenAddInv
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
-⊢ ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = k₁), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
+⊢ ∀ (n : Nat) (e₁ : n + m = k₁), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case oddAddInv
 m k₂ : Nat
 onm : Odd k₂
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
-⊢ ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = k₂), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
+⊢ ∀ (n : Nat) (e₂ : n + m = k₂), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
 For each goal, we know the position of the motive that applies to its target
@@ -289,21 +289,21 @@ leaving the remaining arguments as subgoals to be solved.
 m k₁ : Nat
 enm : Even k₁
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = k₁), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = k₂), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ⊢ @Even.rec motive_1 motive_2 ?evenAddInv.Even.zero ?evenAddInv.Even.succ ?evenAddInv.Odd.succ k₁ enm
-  : ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
+  : ∀ (n : Nat) (e₁ : n + m = k₁), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 
 ▼ case oddAddInv
 m k₂ : Nat
 onm : Odd k₂
 motive_1 := λ (k₁ : Nat) (enm : Even k₁) ↦
-  ∀ (n : Nat) (e₁ : n + m = 0), (Even n ∧ Even m₁) ∨ (Odd n ∧ Odd m₁)
+  ∀ (n : Nat) (e₁ : n + m = k₁), (Even n ∧ Even m) ∨ (Odd n ∧ Odd m)
 motive_2 := λ (k₂ : Nat) (onm : Odd k₂) ↦
-  ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m₂) ∨ (Even n ∧ Odd m₂)
+  ∀ (n : Nat) (e₂ : n + m = k₂), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ⊢ @Odd.rec motive_1 motive_2 ?oddAddInv.Even.zero ?oddAddInv.Even.succ ?oddAddInv.Odd.succ k₁ enm
-  : ∀ (n : Nat) (e₂ : n + m = 0), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
+  : ∀ (n : Nat) (e₂ : n + m = k₂), (Odd n ∧ Even m) ∨ (Even n ∧ Odd m)
 ```
 
 The subgoals are collected up as a 2D array.
