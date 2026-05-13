@@ -660,6 +660,9 @@ Reference: [The Isabelle/Isar Reference Manual](https://isabelle.in.tum.de/doc/i
 
 # Towards nested induction: `mk_all`
 
+🆕 [@arthur-adjedj](https://github.com/arthur-adjedj) has implemented generating deep recursors for nested induction!
+You can find the library at [arthur-adjedj/Leanduction](https://github.com/arthur-adjedj/Leanduction).
+
 As an extra bonus, this repo also includes a `mk_all` attribute for inductive types
 that generates new definitions that lift predicates over the given parameters
 to predicates over that inductive type.
