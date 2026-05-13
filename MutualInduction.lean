@@ -1,9 +1,13 @@
 module
 
 import all Init.Data.Array.QSort.Basic
+import Std.Data.HashMap.Basic
 public meta import Lean.Meta.GeneralizeVars
 public meta import Lean.Meta.Tactic.Generalize
 public meta import Lean.Elab.Tactic.Induction
+public meta import Lean.Elab.Tactic.BuiltinTactic
+meta import all Lean.Elab.Tactic.Induction
+meta import all Lean.Elab.Tactic.BuiltinTactic
 
 -- Why is this not in Lean.Expr?
 meta def Lean.Expr.mvarId? : Expr → Option MVarId
@@ -34,7 +38,7 @@ meta def List.takeToVector? {α} (as : List α) (n : Nat) : Option (Vector α n)
   if e : as.size = n then some ⟨as, e⟩ else none
 
 namespace Lean.Elab.Tactic
-open Meta
+open Meta Std
 
 structure Goal where
   /-- Syntax object of the target -/
@@ -144,18 +148,11 @@ syntax (name := mutual_induction') "mutual_induction'" goal+ : tactic
 /--
 Find a metavariable whose name is (a suffix or prefix of) `tag`,
 and throw an error if none exists.
-This is adapted from `Lean.Elab.Tactic.findTag?`.
 -/
-meta def findTag (mvarIds : List MVarId) (tag : Name) : MetaM MVarId := do
-  match (← mvarIds.findM? fun mvarId => return tag == (← mvarId.getDecl).userName) with
-  | some mvarId => return mvarId
-  | none =>
-  match (← mvarIds.findM? fun mvarId => return tag.isSuffixOf (← mvarId.getDecl).userName) with
-  | some mvarId => return mvarId
-  | none =>
-  match (← mvarIds.findM? fun mvarId => return tag.isPrefixOf (← mvarId.getDecl).userName) with
-  | some mvarId => return mvarId
-  | none => throwError m!"goal '{tag}' not found"
+meta def findTag (mvarIds : List MVarId) (tag : Name) : TacticM MVarId := do
+  let some mvarId ← findTag? mvarIds tag
+  | throwError m!"goal '{tag}' not found"
+  return mvarId
 
 /--
 If custom arguments are provided,
@@ -166,7 +163,7 @@ meta def countArgs {α} (mvarId : MVarId) (argName : Name) (numTargets : Nat) (a
   let some args := args?
     | return Vector.replicate numTargets none
   if e : args.size = numTargets then
-    return by rw [← e]; exact args.toVector.map some
+    return e ▸ args.toVector.map some
   else
     throwTacticEx `mutual_induction mvarId
       m!"incorrect number of {argName} provided: \
@@ -306,7 +303,8 @@ where
                    ++ goal.elimInfo.targetsPos}}
   addMotive (g : Goal) : MetaM GoalWithMotives :=
     g.mvarId.withContext do
-    let ⟨genFVars, goal⟩ ← sortFVarIds (g.userFVars ++ g.genFVars ++ g.closFVars) >>= g.mvarId.revert
+    let revertFVars ← sortFVarIds $ g.userFVars ++ g.genFVars ++ g.closFVars
+    let ⟨genFVars, goal⟩ ← g.mvarId.revert revertFVars
     goal.withContext do
     let goalType ← MetavarDecl.type <$> goal.getDecl
     let motive ← mkLambdaFVars g.targets goalType
@@ -344,7 +342,7 @@ Preconditions:
 * There must exist at least one sequence of subgoals; and
 * All sequences of subgoals must have the same length and pointwise have the same type.
 -/
-meta def deduplicate {n} (tag : Name) (tags : Vector (Name × Name) n) (alts : Vector (Array Alt) n) : MetaM (Array Alt) := do
+meta def deduplicate {n} (tag : Name) (tags : HashMap Name Name) (alts : Vector (Array Alt) n) : MetaM (Array Alt) := do
   let mut deduped := alts[0]!
   -- find the canonical alternatives that prove the motive
   for alt in alts do
@@ -365,7 +363,7 @@ meta def deduplicate {n} (tag : Name) (tags : Vector (Name × Name) n) (alts : V
   -- ensure root of user-facing name corresponds to the original subgoal name
   for alt in deduped do
     let .str ind cstr := alt.info.declName?.getD (← alt.mvarId.getTag) | continue
-    let tag := (tags.toList.lookup ind).getD tag
+    let tag := tags[ind]?.getD tag
     alt.mvarId.setTag <| .str tag cstr
   return deduped
 
@@ -404,12 +402,12 @@ meta def getSubgoal (stxgoal : TSyntax `term × Option (TSyntax `term) × TSynta
   }
 where
   /--
-  Adapted from `Lean.Elab.Tactic.getInductiveValFromMajor`,
+  Adapted from `Lean.Elab.Tactic.getInductiveValFromMajor` in `Induction.lean`,
   which for some reason works in the context of the main goal,
   not in the current context, so using it directly would not find the target,
   which only exists in the context of the subgoal.
   -/
-  getInductiveVal (mvarId : MVarId) (target : Expr) : MetaM InductiveVal :=
+  getInductiveVal (mvarId : MVarId) (target : Expr) : TacticM InductiveVal :=
     mvarId.withContext do
       let targetType ← inferType target
       let targetType ← whnf targetType
@@ -418,31 +416,12 @@ where
           m!"target is not an inductive type{indentExpr targetType}")
         (fun val _ => pure val)
   /--
-  Copied from `Lean.Elab.Tactic.elabTermForElim`, which is private.
-  -/
-  elabTermForElim (stx : Syntax) : TermElabM Expr := do
-    if stx.isIdent then
-      if let some e ← Term.resolveId? stx (withInfo := true) then
-        return e
-    Term.withoutErrToSorry <| Term.withoutHeedElabAsElim do
-      let e ← Term.elabTerm stx none (implicitLambda := false)
-      Term.synthesizeSyntheticMVars (postpone := .no) (ignoreStuckTC := true)
-      let e ← instantiateMVars e
-      let e := e.eta
-      if e.hasMVar then
-        let r ← abstractMVars (levels := false) e
-        return r.expr
-      else
-        return e
-  /--
-  Adapted from `Lean.Elab.Tactic.generalizeTargets`,
+  Adapted from `Lean.Elab.Tactic.generalizeTargets` in `Induction.lean`,
   which for some reason also works in the context of the main goal.
   -/
   generalizeTarget (mvarId : MVarId) (target : Expr) : TacticM (MVarId × Expr) := do
     mvarId.withContext do
-      let generalize? ← do
-        if target.isFVar then target.fvarId!.isLetVar else pure true
-      if generalize? then
+      if (← shouldGeneralizeTarget target) then
         let ⟨#[target], mvarId⟩ ← mvarId.generalize #[{ expr := target }]
           | throwTacticEx `mutual_induction mvarId
               m!"failed to generalize target{indentExpr target}"
@@ -513,7 +492,7 @@ where
     forallTelescope motiveType fun args bodyType => do
       let trivial ← mkLambdaFVars args (.const `PUnit [bodyType.sortLevel!])
       mvarId.assign trivial
-  clearTargets (mvarIds : Array FVarId)  (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
+  clearTargets (mvarIds : Array FVarId) (alt : ElimApp.Alt) : TacticM ElimApp.Alt := do
     let mvarId ← alt.mvarId.tryClearMany mvarIds
     return {alt with mvarId}
 
@@ -554,10 +533,12 @@ which we deduplicate so that the user ony needs to solve one set of them.
 @[tactic mutual_induction, tactic mutual_induction']
 public meta def evalMutualInduction : Tactic := λ stx ↦ do
   let tag ← getMainGoal >>= (·.getTag)
-  let ⟨_, stxgoals⟩ ← parse stx
+  let ⟨n, stxgoals⟩ ← parse stx
   let subgoals ← stxgoals.mapM getSubgoal
   checkTargets subgoals
-  let tags := subgoals.map (λ goal ↦ ⟨goal.indVal.name, goal.name⟩)
+  let tags := subgoals.foldl
+    (λ hmap goal ↦ hmap.insert goal.indVal.name goal.name)
+    (HashMap.emptyWithCapacity n)
   let subgoals ← addMotives subgoals
   let subgoals ← subgoals.mapM evalSubgoal
   let subgoals ← deduplicate tag tags subgoals
