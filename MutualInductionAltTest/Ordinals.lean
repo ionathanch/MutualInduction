@@ -142,6 +142,8 @@ theorem leOverSuccInv : ∀ {is j}, LeOver (succOrdinals is) (.succ j) → LeOve
   let ⟨_, _, h⟩ := leSuccInv'
   exact h leOver
 
+/-- warning: declaration uses `sorry` -/
+#guard_msgs in
 theorem leSucc :
   (∀ {i j}, Le i j → Le i (.succ j)) ∧
   (∀ {i js}, LeUnder i js → LeUnder i (succOrdinals js)) ∧

@@ -34,7 +34,7 @@ inductive Wf : Ctxt → Prop where
   | cons {Γ A} :
     ⊢ Γ →
     Γ ⊢ A ∶ type →
-    ---------------
+    --------------
     ⊢ Γ ∷ A
 
 -- Γ ⊢ a ∶ A
@@ -42,32 +42,32 @@ inductive Wt : Ctxt → Term → Term → Prop where
   | var {Γ x A} :
     Γ ∋ x ∶ A →
     ⊢ Γ →
-    ---------------
+    -------------
     Γ ⊢ var x ∶ A
   | type {Γ} :
     ⊢ Γ →
-    -----------------
+    ---------------
     Γ ⊢ type ∶ type
   | arr {Γ A B} :
     Γ ⊢ A ∶ type →
     Γ ∷ A ⊢ B ∶ type →
-    --------------------
+    ------------------
     Γ ⊢ arr A B ∶ type
   | abs {Γ b A B} :
     Γ ⊢ A ∶ type →
     Γ ∷ A ⊢ b ∶ B →
-    ---------------------
+    -------------------
     Γ ⊢ abs b ∶ arr A B
   | app {Γ b a A B} :
     Γ ⊢ b ∶ arr A B →
     Γ ⊢ a ∶ A →
-    ------------------------
+    -----------------------
     Γ ⊢ app b a ∶ subst B a
   | conv {Γ a A B} :
     Γ ⊢ a ∶ A →
     Γ ⊢ B ∶ type →
     A ≡ B →
-    ---------------
+    --------------
     Γ ⊢ a ∶ B
 end
 end
@@ -162,6 +162,8 @@ theorem wtwf {Γ a A} (h : Γ ⊢ a ∶ A) : ⊢ Γ := by
   all_goals try simp at * <;> assumption
   -- induction h using Wt.rec (motive_1 := λ _ _ ↦ True)
 
+/-- warning: declaration uses `sorry` -/
+#guard_msgs in
 theorem regularity {Γ} :
   (∀ x A, Γ ∋ x ∶ A → ⊢ Γ → Γ ⊢ A ∶ .type) ∧
   (∀ a A, Γ ⊢ a ∶ A → Γ ⊢ A ∶ .type) := by

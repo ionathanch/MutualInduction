@@ -119,6 +119,8 @@ by
       injection eis with e₁ e₂; subst e₁; subst e₂
       exact overCons (ihle rfl rfl) (ihleover rfl rfl)
 
+/-- warning: declaration uses `sorry` -/
+#guard_msgs in
 joint
   theorem leSucc {i j} (h : Le i j) : Le i (.succ j)
   theorem leUnderSucc {i js} (h : LeUnder i js) : LeUnder i (succOrdinals js)
