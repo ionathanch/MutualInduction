@@ -144,9 +144,10 @@ theorem wtfInd
   case app  => apply app  <;> assumption
   case conv => apply conv <;> assumption
 
+set_option linter.defProp false in
 def wtInd P := @Wt.rec (λ _ _ ↦ True) P (by simp) (by simp)
 
-def wfInd (P : ∀ {Γ}, ⊢ Γ → Prop)
+theorem wfInd (P : ∀ {Γ}, ⊢ Γ → Prop)
   (nil : P .nil)
   (cons : ∀ {Γ A} (h : ⊢ Γ) (hA : Γ ⊢ A ∶ .type), P (.cons h hA))
   : ∀ {Γ} (h : ⊢ Γ), P h := by

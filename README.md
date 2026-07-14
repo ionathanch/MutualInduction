@@ -19,16 +19,25 @@
 
 ---
 
-This is an experimental mutual induction tactic that acts on multiple goals.
-For now, the syntax looks like the below,
-with no support yet for the usual `induction` tactic's features `with`
-or for generalizing different variables in each goal.
+This is a mutual induction tactic that acts on multiple goals.
+The syntax looks like the below,
+with no support yet for the usual `induction` tactic's `with` feature.
 
 ```lean
 mutual_induction x₁, ..., xₙ (using r₁, ..., rₙ)? (generalizing y₁ ... yₘ)?
 ```
 
-Generating multiple goals can be done using existing declarations refinement tactics,
+There is also an alternate syntax that uses named goals
+and separate `generalizing` clauses for each goal.
+
+```lean
+mutual_induction'
+| goal₁ => x₁ (using r₁)? (generalizing z₁...)?
+...
+| goalₙ => xₙ (using rₙ)? (generalizing zₙ...)?
+```
+
+Generating multiple goals can be done using existing refinement tactics,
 but a convenient `joint theorem` declaration form is also provided.
 
 ```lean
