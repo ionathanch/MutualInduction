@@ -1,13 +1,14 @@
 module
 
-import all Init.Data.Array.QSort.Basic
-import Std.Data.HashMap.Basic
 public meta import Lean.Meta.GeneralizeVars
 public meta import Lean.Meta.Tactic.Generalize
 public meta import Lean.Elab.Tactic.Induction
 public meta import Lean.Elab.Tactic.BuiltinTactic
 meta import all Lean.Elab.Tactic.Induction
 meta import all Lean.Elab.Tactic.BuiltinTactic
+meta import all Init.Data.Array.QSort.Basic
+meta import Std.Data.HashMap.Basic
+open Std
 
 -- Why is this not in Lean.Expr?
 meta def Lean.Expr.mvarId? : Expr → Option MVarId
@@ -38,7 +39,7 @@ meta def List.takeToVector? {α} (as : List α) (n : Nat) : Option (Vector α n)
   if e : as.size = n then some ⟨as, e⟩ else none
 
 namespace Lean.Elab.Tactic
-open Meta Std
+open Meta
 
 structure Goal where
   /-- Syntax object of the target -/
