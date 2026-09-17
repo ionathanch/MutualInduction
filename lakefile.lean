@@ -4,7 +4,7 @@ open Lake DSL
 
 package «MutualInduction» where
 
-version := v!"0.2.0"
+version := v!"0.3.0"
 description := "A mutual induction tactic for Lean 4."
 license := "Zlib"
 reservoir := true
